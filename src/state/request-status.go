@@ -2,8 +2,8 @@ package state
 
 import (
 	"log"
-	packet "mc_reverse_proxy/packet"
-	service "mc_reverse_proxy/service"
+	packet "mc_reverse_proxy/src/packet"
+	service "mc_reverse_proxy/src/service"
 )
 
 type RequestStatusState struct {

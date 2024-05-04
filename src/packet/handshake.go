@@ -3,8 +3,8 @@ package packet
 import (
 	"fmt"
 	"log"
-	"mc_reverse_proxy/utils"
-	hex "mc_reverse_proxy/utils"
+	"mc_reverse_proxy/src/utils"
+	hex "mc_reverse_proxy/src/utils"
 )
 
 const (

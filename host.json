@@ -1,22 +1,22 @@
 {
     "mc.billybacker.cc": {
         "name": "Survival",
-        "host": "192.168.100.184",
-        "port": "25566"
-    },
-    "mc12.billybacker.cc": {
-        "name": "Lab",
-        "host": "192.168.100.184",
-        "port": "25567"
-    },
-    "mcbungee.billybacker.cc": {
-        "name": "BungeeCord",
-        "host": "192.168.100.184",
+        "host": "171.4.177.54",
         "port": "25565"
     },
-    "mc.nb.local": {
-        "name": "Wifi",
-        "host": "192.168.100.184",
-        "port": "25565"
+    "mc-colo1.crunzex.com": {
+        "name": "mc-colo",
+        "host": "10.10.10.21",
+        "port": "25001"
+    },
+    "mc-colo2.crunzex.com": {
+        "name": "mc-colo",
+        "host": "10.10.10.21",
+        "port": "25002"
+    },
+    "mc-colo3.crunzex.com": {
+        "name": "mc-colo",
+        "host": "10.10.10.21",
+        "port": "25003"
     }
 }

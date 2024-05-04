@@ -1,0 +1,9 @@
+services:
+    proxy:
+        container_name: mc-reverse-proxy
+        build:
+            context: .
+            dockerfile: docker/dockerfile.prod
+        restart: unless-stopped
+        ports:
+            - 25565:25565

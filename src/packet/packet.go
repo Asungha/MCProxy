@@ -3,7 +3,7 @@ package packet
 import (
 	"encoding/binary"
 	"fmt"
-	utils "mc_reverse_proxy/utils"
+	utils "mc_reverse_proxy/src/utils"
 )
 
 type Packet[T IPacketData] struct {

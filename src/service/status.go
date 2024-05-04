@@ -2,7 +2,7 @@ package service
 
 import (
 	"encoding/json"
-	"mc_reverse_proxy/packet"
+	"mc_reverse_proxy/src/packet"
 )
 
 func ModifyStatusMessage(packet *packet.Status) (*packet.Status, error) {

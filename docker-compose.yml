@@ -7,3 +7,9 @@ services:
         restart: unless-stopped
         ports:
             - 25565:25565
+        networks:
+            - mc-network
+
+networks:
+    mc-network:
+        driver: host

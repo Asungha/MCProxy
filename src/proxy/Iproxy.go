@@ -18,8 +18,6 @@ type Iproxy interface {
 }
 
 type Proxy struct {
-	StateMachine *state.StateMachine
-
 	Listener *net.Listener
 
 	routerLock sync.Mutex
@@ -190,28 +188,29 @@ func (p *Proxy) Serve() {
 	startTime := time.Now()
 	defer runtime.GC()
 
-	p.StateMachine = state.NewStateMachine(p.Listener, GetServerList())
-	err := p.StateMachine.Run() // Block until someone connected
+	statemachine := state.NewStateMachine(p.Listener, GetServerList())
+	err := statemachine.Run() // Block until someone connected
 	if err != nil {
-		log.Printf("[Router] Connection accept failed: %v", err)
+		log.Printf("[Proxy] Connection accept failed: %v", err)
 		// p.StateMachine.Destroy()
 		return
 	}
 
-	log.Printf("[Router] Connection between proxy and client established")
+	log.Printf("[Proxy] Connection between proxy and client established")
 	// p.threadWaitGroup.Add(1)
-	go func() {
+	go func(_sm *state.StateMachine) {
 		// defer p.threadWaitGroup.Done()
 		for {
-			switch p.StateMachine.Transition() {
+			switch _sm.Transition() {
 			case state.STATUS_OK:
 				continue
 			default:
-				log.Printf("[Router] Connection Terminated after %v", time.Since(startTime))
+				log.Printf("[Proxy] Connection Terminated after %v", time.Since(startTime))
+				_sm.Destroy()
 				return
 			}
 		}
-	}()
+	}(statemachine)
 }
 
 func NewProxy(port string) (Iproxy, error) {

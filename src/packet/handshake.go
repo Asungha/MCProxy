@@ -18,11 +18,15 @@ type PlayerData struct {
 	UUID             []byte
 	SizeHeaderLength int
 	isOldProtocol    bool
+	isEmpty          bool
 }
 
 func (p PlayerData) ImplPacketData() {}
 
 func (p *PlayerData) Encode() ([]byte, error) {
+	if p.isEmpty {
+		return []byte{}, nil
+	}
 	// log.Printf("PlayerData: %s, %s", p.Name, p.UUID)
 	name := []byte(p.Name)
 	name_length := make([]byte, binary.MaxVarintLen64)
@@ -36,7 +40,7 @@ func (p *PlayerData) Encode() ([]byte, error) {
 func (p *PlayerData) Decode(data []byte, size int) error {
 	pname_l, pname_n := binary.Uvarint(data)
 	if pname_n == 0 {
-		return fmt.Errorf("Invalid Name Length: %d", pname_n)
+		p.isEmpty = true
 	}
 	pname := string(data[pname_n : pname_n+int(pname_l)])
 	// log.Printf("Player Name: %s", pname)
@@ -52,6 +56,9 @@ func (p *PlayerData) String() string {
 }
 
 func (p *PlayerData) Length() int {
+	if p.isEmpty {
+		return 0
+	}
 	return len(p.Name) + len(p.UUID) - p.SizeHeaderLength + 1
 }
 

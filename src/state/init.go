@@ -12,22 +12,22 @@ type InitState struct {
 func (init *InitState) ImplState() {}
 
 func (init *InitState) Enter(sm *StateMachine) error {
-	log.Printf("Enter init state")
+	// log.Printf("Enter init state")
 	init.sm = sm
-	log.Printf("Wait for connection")
+	// log.Printf("Wait for connection")
 	err := init.sm.Conn.WaitClientConnection()
 	if err != nil {
 		log.Printf(err.Error())
 		return err
 	}
-	log.Printf("got connection")
-	init.sm.Conn.WaitGroup.Add(1)
+	// log.Printf("got connection")
+	// init.sm.Conn.WaitGroup.Add(1)
 	go init.sm.Conn.ListenClient()
-	log.Printf("%v | %v", init.sm.Conn, init.sm.Conn.ClientConn)
+	// log.Printf("%v | %v", init.sm.Conn, init.sm.Conn.ClientConn)
 	return nil
 }
 func (init *InitState) Exit() IState {
-	log.Printf("Exit init state")
+	// log.Printf("Exit init state")
 	return &HandshakeState{}
 }
 

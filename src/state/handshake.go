@@ -17,13 +17,13 @@ type HandshakeState struct {
 func (h *HandshakeState) ImplState() {}
 
 func (h *HandshakeState) Enter(sm *StateMachine) error {
-	log.Printf("Enter handshake state")
+	// log.Printf("Enter handshake state")
 	h.sm = sm
 	// log.Printf("%v", &h.sm.Conn.ClientData)
-	log.Printf("%v | %v", h.sm.Conn, h.sm.Conn.ClientConn)
+	// log.Printf("%v | %v", h.sm.Conn, h.sm.Conn.ClientConn)
 	select {
 	case rawData := <-h.sm.Conn.ClientData:
-		log.Printf("%x", rawData)
+		// log.Printf("%x", rawData)
 		pd := pac.PlayerData{}
 		pd_pac := pac.Packet[*pac.PlayerData]{Data: &pd}
 		hs := pac.Handshake{PlayerData: &pd_pac}
@@ -34,7 +34,7 @@ func (h *HandshakeState) Enter(sm *StateMachine) error {
 		}
 		h.hostname = data.Data.Hostname
 		h.Data = data
-		log.Printf("%s %s", h.hostname, data.String())
+		// log.Printf("%s %s", h.hostname, data.String())
 		return nil
 	case <-h.sm.ctx.Done():
 		return errors.New("Context Done")
@@ -49,23 +49,21 @@ func (h *HandshakeState) Action() error {
 			if err != nil {
 				return err
 			}
-			// log.Printf("%v", h.sm.Conn)
-			log.Printf("%v | %v", h.sm.Conn, h.sm.Conn.ClientConn)
 			err = h.sm.Conn.PreConditionCheck()
 			if err != nil {
-				log.Printf("Precondition failed %v", err)
+				log.Printf("[handshake state] Precondition failed %v", err)
 				return err
 			}
 			h.sm.Conn.WaitGroup.Add(1)
 			go h.sm.Conn.ListenServer()
 			hs_packet, err := h.Data.Encode()
 			if err != nil {
-				log.Printf("Encode handshale failed %v", err)
+				log.Printf("[handshake state] Encode handshale failed %v", err)
 				return err
 			}
 			err = h.sm.Conn.WriteServer(hs_packet)
 			if err != nil {
-				log.Printf("Handshake send failed %v", err)
+				log.Printf("[handshake state] Handshake packet send failed %v", err)
 				return err
 			}
 			return nil
@@ -76,7 +74,7 @@ func (h *HandshakeState) Action() error {
 }
 
 func (h *HandshakeState) Exit() IState {
-	log.Printf("Exit handshake state")
+	// log.Printf("Exit handshake state")
 	err := h.sm.Conn.PreConditionCheck()
 	if err != nil {
 		return &RejectState{Message: err.Error()}

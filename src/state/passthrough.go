@@ -28,7 +28,7 @@ func (p *PassthroughState) Action() error {
 		p.sm.Conn.WriteClient(sData)
 		return nil
 	case <-p.sm.Conn.ctx.Done():
+		// log.Printf("%v", e)
 		return errors.New("Context Done")
 	}
-	return errors.New("Unexpected condition")
 }

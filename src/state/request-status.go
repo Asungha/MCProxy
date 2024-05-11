@@ -1,107 +1,78 @@
 package state
 
 import (
+	"bytes"
 	"log"
-	packet "mc_reverse_proxy/src/packet"
-	service "mc_reverse_proxy/src/service"
+	pac "mc_reverse_proxy/src/packet"
 )
 
-type RequestStatusState struct {
-	connData     *ConnectionData
-	action       int
-	originalData *[]byte
-	modifiedData []byte
+type SendStatus struct {
+	data          pac.Packet[*pac.Status]
+	isOldProtocol bool
 }
 
-func (r *RequestStatusState) ImplState() {}
+func (h *SendStatus) ImplState() {}
 
-func (r *RequestStatusState) Enter(connData *ConnectionData) {
-	r.connData = connData
-	select {
-	case clientData := <-r.connData.ClientData:
-		r.originalData = clientData.bytes
-		p := packet.NewPacket(&packet.Status{})
-		err := p.Decode(clientData.bytes, clientData.length)
-		if err != nil {
-			log.Printf("Error decoding packet in Request status state: %v", err)
-			r.action = ACTION_TRANSPARENT
-			return
-		}
-		_, err = service.ModifyStatusMessage(p.Data)
-		if err != nil {
-			log.Printf("Error modifying status message in Request status state: %v", err)
-			r.action = ACTION_TRANSPARENT
-			return
-		}
-		r.modifiedData = p.Encode()
-		if err != nil {
-			log.Printf("Error encoding packet in Request status state: %v", err)
-			r.action = ACTION_TRANSPARENT
-			return
-		}
-		r.action = ACTION_ACCEPT
-	case <-r.connData.ctx.Done():
-		r.action = ACTION_CANCLE
+func (h *SendStatus) Enter(data []byte) error {
+	log.Printf("SendStatus Enter")
+	if bytes.Equal(data, []byte{0x01, 0x00}) {
+		// log.Printf("Old protocol detected")
+		h.isOldProtocol = true
+		return nil
 	}
+	res := pac.Packet[*pac.Status]{Data: &pac.Status{}}
+	// res := pac.NewPacket(pac.NewHandshake())
+	err := res.Decode(&data, len(data))
+	if err != nil {
+		return err
+	}
+	h.data = res
+	return nil
 }
+func (h *SendStatus) Exit() {}
 
-func (r *RequestStatusState) Exit() {}
-
-func (r *RequestStatusState) Validate() error {
+func (h *SendStatus) Validate() error {
 	return nil
 }
 
-func (r *RequestStatusState) Update(sm *StateMachine) error {
-	switch r.action {
-	case ACTION_TRANSPARENT:
-		sm.setState(&ResponseStatusState{IsTranparent: true})
-		r.connData.ServerData <- Data{bytes: r.originalData, length: len(r.modifiedData)}
-	case ACTION_ACCEPT:
-		sm.setState(&ResponseStatusState{IsTranparent: false})
-		// r.connData.ServerData <- Data{bytes: &r.modifiedData, length: len(r.modifiedData)}
-	case ACTION_CANCLE:
-		sm.setState(&RejectState{err: nil})
+func (h *SendStatus) Action() (*[]byte, error) {
+	if h.isOldProtocol {
+		return nil, nil // skip
 	}
-	return nil
+	// res := pac.Packet[*pac.Raw]{Data: &pac.Raw{}}
+	// err := res.Decode(&h.data, len(h.data))
+	// if err != nil {
+	// 	log.Printf("Error decoding packet in Passthrough state: %v", err)
+	// } else {
+	// 	log.Printf("[Action] Play packet: %s", res.Data.String())
+	// }
+	// err := pac.AsRawPacket(h.data, &res)
+	// return res, nil
+	// log.Printf("[Action] Handshake packet: %v", h.data.Data)
+	// return h.data.Encode()
+
+	// log.Printf("Status packet: %s", h.data.Data.String())
+	// log.Printf("Status packet: %v", h.data.Data)
+	json, _ := h.data.Data.JSON()
+	// json.Players.Online = 0
+	// json.Players.Max = 0
+	json.Description.Extra = []pac.StatusDesExtra{}
+	builder := pac.DescriptionBuilder{}
+	builder.Add("§4M§cA§6I§2B§aO§bR§3K")
+	json.Description.Extra = builder.Build()
+	h.data.Data.SetJSON(json)
+
+	// log.Printf("Status packet: %v", json)
+	// h.data.Data.Json = strings.Replace(h.data.Data.Json, "\"online\":0", "\"online\":555555555", -1)
+	data, err := h.data.Encode()
+	return &data, err
 }
 
-type ResponseStatusState struct {
-	connData     *ConnectionData
-	action       int
-	err          error
-	IsTranparent bool
-}
-
-func (r *ResponseStatusState) ImplState() {}
-
-func (r *ResponseStatusState) Enter(connData *ConnectionData) {
-	r.connData = connData
-	if r.IsTranparent { // If the data is transparent, just forward it to the client
-		select {
-		case serverData := <-r.connData.ServerData:
-			r.connData.ClientData <- serverData
-			r.action = ACTION_ACCEPT
-		case <-r.connData.ctx.Done():
-			r.action = ACTION_CANCLE
-			return
-		}
-	} else { // Otherwise, send a custom response to the client
-
-	}
-}
-
-func (r *ResponseStatusState) Exit() {}
-
-func (r *ResponseStatusState) Validate() error {
-	return nil
-}
-
-func (r *ResponseStatusState) Update(sm *StateMachine) error {
-	switch r.action {
-	case ACTION_CANCLE:
-		sm.setState(&RejectState{err: nil})
-	case ACTION_ACCEPT:
-		sm.setState(&OKState{})
-	}
+func (h *SendStatus) Update(sm *StateMachine, data *map[string]string, event chan Event, ack chan bool) error {
+	// if h.isOldProtocol {
+	// 	return sm.setState(&SendStatus{})
+	// } else {
+	// 	return sm.setState(&PassthroughState{})
+	// }
 	return nil
 }

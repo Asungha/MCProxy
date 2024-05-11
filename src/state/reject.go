@@ -1,22 +1,25 @@
 package state
 
+import "log"
+
 type RejectState struct {
-	connData *ConnectionData
-	err      error
+	sm      *StateMachine
+	Message string
 }
 
 func (r *RejectState) ImplState() {}
 
-func (r *RejectState) Enter(connData *ConnectionData) {
-	r.connData = connData
-}
-
-func (r *RejectState) Exit() {}
-
-func (r *RejectState) Validate() error {
+func (r *RejectState) Enter(sm *StateMachine) error {
+	log.Printf("RejectState")
+	r.sm = sm
 	return nil
 }
 
-func (r *RejectState) Update(sm *StateMachine) error {
-	return r.err
+func (r *RejectState) Exit() IState {
+	return nil
+}
+
+func (r *RejectState) Action() error {
+	log.Printf("[Reject State] State Rejected : %s", r.Message)
+	return r.sm.Conn.CloseConn()
 }

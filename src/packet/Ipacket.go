@@ -3,7 +3,8 @@ package packet
 type IPacketData interface {
 	ImplPacketData()
 	String() string
-	Encode() []byte
-	Decode(*[]byte) error
+	Encode() ([]byte, error)
+	Decode([]byte, int) error
 	Length() int
+	Destroy()
 }

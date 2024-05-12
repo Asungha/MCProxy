@@ -1,22 +1,26 @@
 {
-    "mc.billybacker.cc": {
-        "name": "Survival",
-        "host": "171.4.177.54",
-        "port": "25565"
+    "mc.crunzex.com": {
+        "name": "Lab",
+        "ip": "171.4.176.27",
+        "port": "25565",
+        "hostname": "mc.crunzex.com"
     },
     "mc-colo1.crunzex.com": {
-        "name": "mc-colo",
-        "host": "10.10.10.21",
-        "port": "25001"
+        "name": "mc-colo1",
+        "ip": "10.10.10.190",
+        "port": "25001",
+        "hostname": "mc-colo1.crunzex.com"
     },
     "mc-colo2.crunzex.com": {
-        "name": "mc-colo",
-        "host": "10.10.10.21",
-        "port": "25002"
+        "name": "mc-colo2",
+        "host": "10.10.10.190",
+        "port": "25002",
+        "hostname": "mc-colo2.crunzex.com"
     },
     "mc-colo3.crunzex.com": {
-        "name": "mc-colo",
-        "host": "10.10.10.21",
-        "port": "25003"
+        "name": "mc-colo3",
+        "host": "10.10.10.190",
+        "port": "25003",
+        "hostname": "mc-colo3.crunzex.com"
     }
 }

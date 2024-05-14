@@ -2,6 +2,7 @@ package packet
 
 import (
 	"fmt"
+	"log"
 
 	// hex "mc_reverse_proxy/src/utils"
 	"encoding/binary"
@@ -71,7 +72,9 @@ type Handshake struct {
 	Port            int
 	NextState       byte
 	Type            int
-	PlayerData      *Packet[*PlayerData]
+	// PlayerData      *Packet[*PlayerData]
+	PlayerData []byte
+	tail       []byte
 }
 
 func (h Handshake) ImplPacketData() {}
@@ -124,16 +127,19 @@ func (h *Handshake) Encode() ([]byte, error) {
 	// 	return nil, err
 	// }
 
-	var tail []byte
-	if h.PlayerData != nil && h.NextState == 0x02 {
-		playerData, err := h.PlayerData.Encode()
-		if err != nil {
-			return nil, err
-		}
-		tail = playerData
-	} else {
-		tail = []byte{0x01, 0x00}
+	var tail []byte = []byte{}
+	if h.tail != nil {
+		tail = h.tail
 	}
+	// if h.PlayerData != nil && h.NextState == 0x02 {
+	// 	playerData, err := h.PlayerData.Encode()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	tail = playerData
+	// } else {
+	// tail = []byte{0x01, 0x00}
+	// }
 
 	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState}, tail)
 	// log.Printf("Raw: %x", raw)
@@ -170,7 +176,7 @@ func (h *Handshake) Decode(data []byte, size int) error {
 	if s_length+v_length > n-4 {
 		return fmt.Errorf("Invalid Hostname Length: %d", s_length)
 	}
-	// log.Printf("ProtocolVersion: %d", h.ProtocolVersion)
+	log.Printf("ProtocolVersion: %d", h.ProtocolVersion)
 	h.Hostname = string(data[s_length+v_length : s_length+v_length+int(h_length)])
 	// log.Printf("Hostname: %s", h.Hostname)
 	// log.Printf("Port hex: %x", data[s_length+v_length+int(h_length):s_length+v_length+int(h_length)+2])
@@ -178,17 +184,29 @@ func (h *Handshake) Decode(data []byte, size int) error {
 	h.Port = int(port)
 	// log.Printf("Port: %d", h.Port)
 	h.NextState = data[v_length+int(h_length)+3 : v_length+int(h_length)+3+1][0]
-	if h.NextState == 2 { // login
-		playerData := NewPacket(&PlayerData{})
-		// log.Printf("PlayerData: %x", data[v_length+s_length+int(h_length)+3:])
-		d := data[v_length+s_length+int(h_length)+3:]
-		err := playerData.Decode(&d, len(d))
-		if err != nil {
-			return err
+	remainingData := data[v_length+int(h_length)+3+1:]
+	if l := len(remainingData); l != 0 {
+		if l == 2 {
+			h.tail = remainingData
+			return nil
 		}
-		h.PlayerData = &playerData
-		// log.Printf("PlayerData: %s", h.playerData.Data.String())
+		h.PlayerData = remainingData
 	}
+	// if h.NextState == 2 { // login
+	// 	d := data[v_length+s_length+int(h_length)+3:]
+	// 	if len(d) < 5 {
+	// 		h.PlayerData = nil
+	// 		return nil
+	// 	}
+	// 	playerData := NewPacket(&PlayerData{})
+	// 	log.Printf("PlayerData: %x", data[v_length+s_length+int(h_length)+3:])
+	// 	err := playerData.Decode(&d, len(d))
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	h.PlayerData = &playerData
+	// 	// log.Printf("PlayerData: %s", h.playerData.Data.String())
+	// }
 	// log.Printf("NextState: %d", h.NextState)
 
 	// if i := hex.ByteToInt(hex_next_state.Get()); i > 2 {
@@ -214,8 +232,8 @@ func (h *Handshake) Length() int {
 }
 
 func (h *Handshake) Destroy() {
-	h.PlayerData.Destroy()
-	h.PlayerData = nil
+	// h.PlayerData.Destroy()
+	// h.PlayerData = nil
 }
 
 func NewHandshake() *Handshake {

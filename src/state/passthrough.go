@@ -22,10 +22,14 @@ func (p *PassthroughState) Exit() IState {
 func (p *PassthroughState) Action() error {
 	select {
 	case cData := <-p.sm.Conn.ClientData:
+		p.sm.StateChangeLock.Lock()
 		p.sm.Conn.WriteServer(cData)
+		p.sm.StateChangeLock.Unlock()
 		return nil
 	case sData := <-p.sm.Conn.ServerData:
+		p.sm.StateChangeLock.Lock()
 		p.sm.Conn.WriteClient(sData)
+		p.sm.StateChangeLock.Unlock()
 		return nil
 	case <-p.sm.Conn.ctx.Done():
 		// log.Printf("%v", e)

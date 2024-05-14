@@ -17,16 +17,14 @@ type HandshakeState struct {
 func (h *HandshakeState) ImplState() {}
 
 func (h *HandshakeState) Enter(sm *StateMachine) error {
-	// log.Printf("Enter handshake state")
+	log.Printf("[state machine: Handshake] Enter handshake state")
 	h.sm = sm
 	// log.Printf("%v", &h.sm.Conn.ClientData)
 	// log.Printf("%v | %v", h.sm.Conn, h.sm.Conn.ClientConn)
 	select {
 	case rawData := <-h.sm.Conn.ClientData:
 		// log.Printf("%x", rawData)
-		pd := pac.PlayerData{}
-		pd_pac := pac.Packet[*pac.PlayerData]{Data: &pd}
-		hs := pac.Handshake{PlayerData: &pd_pac}
+		hs := pac.Handshake{}
 		data := pac.Packet[*pac.Handshake]{Data: &hs}
 		err := data.Decode(&rawData, len(rawData))
 		if err != nil {
@@ -54,18 +52,26 @@ func (h *HandshakeState) Action() error {
 				log.Printf("[handshake state] Precondition failed %v", err)
 				return err
 			}
-			h.sm.Conn.WaitGroup.Add(1)
 			go h.sm.Conn.ListenServer()
 			hs_packet, err := h.Data.Encode()
 			if err != nil {
 				log.Printf("[handshake state] Encode handshale failed %v", err)
 				return err
 			}
+			h.sm.StateChangeLock.Lock()
 			err = h.sm.Conn.WriteServer(hs_packet)
 			if err != nil {
 				log.Printf("[handshake state] Handshake packet send failed %v", err)
 				return err
 			}
+			if h.Data.Data.PlayerData != nil {
+				err = h.sm.Conn.WriteServer(h.Data.Data.PlayerData)
+				if err != nil {
+					log.Printf("[handshake state] Player data packet send failed %v", err)
+					return err
+				}
+			}
+			h.sm.StateChangeLock.Unlock()
 			return nil
 		}
 		return errors.New("[Handshake State] host config file malformed")
@@ -77,25 +83,40 @@ func (h *HandshakeState) Exit() IState {
 	// log.Printf("Exit handshake state")
 	err := h.sm.Conn.PreConditionCheck()
 	if err != nil {
-		return &RejectState{Message: err.Error()}
+		log.Printf("[state machine: Handshake] Error: %v", err)
+		return nil
 	}
-	defer func() {
-		if h.Data.Data.PlayerData != nil {
-			h.Data.Data.PlayerData.Destroy()
-		}
-		h.Data.Destroy()
-	}()
+	// defer func() {
+	// 	if h.Data.Data.PlayerData != nil {
+	// 		h.Data.Data.PlayerData.Destroy()
+	// 	}
+	// }()
 	if h.Data.Data.NextState == 0x01 {
 		if h.hostname != "" {
 			// log.Printf("Send status")
 			// d := pac.Packet[*pac.Status]{}
+			log.Printf("[state machine: Handshake] Handshake for status request done")
+			// log.Printf("[state machine: Handshake] Change to passthrough state (client already send login)")
 			return &PassthroughState{}
+		} else {
+			log.Printf("[state machine: Handshake] Error: Hostname not provided")
+			return nil
 		}
-		h.sm.Conn.TargetHostname = h.Data.Data.Hostname
+		// h.sm.Conn.TargetHostname = h.Data.Data.Hostname
 		// log.Printf("HandshakeState hostname %v", h.Data.Data.Hostname)
-		return h
+		// return h
 	} else {
 		// log.Printf("Login")
+		log.Printf("[state machine: Handshake] Handshake for login request done")
+		// if h.Data.Data.PlayerData == nil {
+		// 	log.Printf("[state machine: Handshake] Change to login state")
+		// 	// data, err := h.Data.Encode()
+		// 	// if err != nil {
+		// 	// 	log.Printf("[state machine: Handshake] Encoding error")
+		// 	// 	return nil
+		// 	// }
+		// 	return &LoginState{OldData: []byte{}}
+		// }
 		return &PassthroughState{}
 	}
 	// return &RejectState{Message: "Unexpected condition"}

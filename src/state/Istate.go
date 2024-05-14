@@ -8,7 +8,6 @@ import (
 	"net"
 	"runtime"
 	"sync"
-	"time"
 )
 
 const (
@@ -38,7 +37,6 @@ type Connection struct {
 	ServerConn     *net.Conn
 	ClientData     chan []byte
 	ServerData     chan []byte
-	WaitGroup      *sync.WaitGroup
 	ctx            context.Context
 	cancle         context.CancelCauseFunc
 
@@ -88,19 +86,24 @@ func (c *Connection) PreConditionCheck() error {
 
 func (c *Connection) ListenClient() error {
 	// defer c.WaitGroup.Done()
-	// errs := make(chan error)
+	errs := make(chan error)
+	// done := make(chan bool)
 	go func() {
+		defer close(c.ClientData)
 		for {
-			buf := make([]byte, 512)
-			(*c.ClientConn).SetReadDeadline(time.Now().Add(5 * time.Second))
+			buf := make([]byte, 1024)
+			// (*c.ClientConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ClientConn).Read(buf)
-			// log.Printf("Reading from client: %x", buf[:n])
+			log.Printf("[client listener Debug] Reading %d bytes from client: %x", n, buf[:n])
 			if err != nil {
-				// log.Printf("[client listener] Failed to read from client connection: %v", err)
+				log.Printf("[client listener] Failed to read from client connection: %v", err)
 				c.cancle(err)
 				buf = nil
-				// errs <- err
+				errs <- err
 				break
+			}
+			if n == 0 {
+				continue
 			}
 			data := buf[:n]
 			// c.StateChangeLock.Lock()
@@ -114,34 +117,34 @@ func (c *Connection) ListenClient() error {
 	}()
 	for {
 		select {
-		// case e := <-errs:
-		// 	(*c.ClientConn).Close()
-		// 	log.Printf("[ListenClient] exit due to error: %v", e)
-		// 	c.cancle(e)
-		// 	return nil
-		case <-c.ctx.Done():
+		case e := <-errs:
 			(*c.ClientConn).Close()
-			log.Printf("[client listener] Exit due context canceled")
+			log.Printf("[ListenClient] exit due to error: %v", e)
+			c.cancle(e)
 			return nil
+			// case <-c.ctx.Done():
+			// 	(*c.ClientConn).Close()
+			// 	log.Printf("[client listener] Exit due context canceled")
+			// 	return nil
 		}
 	}
 }
 
 func (c *Connection) ListenServer() error {
-	defer c.WaitGroup.Done()
-	// errs := make(chan error)
+	// defer close(c.ServerData)
+	errs := make(chan error)
 	// datas := make(chan []byte)
 	go func() {
 		for {
-			buf := make([]byte, 512)
-			(*c.ServerConn).SetReadDeadline(time.Now().Add(5 * time.Second))
+			buf := make([]byte, 1024)
+			// (*c.ServerConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ServerConn).Read(buf)
-			// log.Printf("Reading %d from upstream: %x", n, buf[:n])
+			log.Printf("[server listener Debug] Reading %d bytes from upstream: %x", n, buf[:n])
 			if err != nil {
-				// log.Printf("Failed to read from upstream connection: %v", err)
+				log.Printf("[server listener] Failed to read from upstream connection: %v", err)
 				c.cancle(err)
 				buf = nil
-				// errs <- err
+				errs <- err
 				break
 			}
 			if n == 0 {
@@ -157,15 +160,15 @@ func (c *Connection) ListenServer() error {
 	}()
 	for {
 		select {
-		// case e := <-errs:
-		// 	c.cancle(e)
-		// 	(*c.ServerConn).Close()
-		// 	log.Printf("[ListenServer] exit due to error: %v", e)
-		// 	return nil
-		case <-c.ctx.Done():
+		case e := <-errs:
+			c.cancle(e)
 			(*c.ServerConn).Close()
-			log.Printf("[server listener] Exit due context canceled")
+			log.Printf("[ListenServer] exit due to error: %v", e)
 			return nil
+			// case <-c.ctx.Done():
+			// 	(*c.ServerConn).Close()
+			// 	log.Printf("[server listener] Exit due context canceled")
+			// 	return nil
 		}
 	}
 }
@@ -173,7 +176,7 @@ func (c *Connection) ListenServer() error {
 func (c *Connection) WriteClient(input []byte) error {
 	// log.Printf("Writing to client: %s", input.String())
 	// data := input.Encode()
-	// log.Printf("Writing hex to client: %x", input)
+	log.Printf("[client writter Debug] Writing data to client: %x", input)
 	_, err := (*c.ClientConn).Write(input)
 	if err != nil {
 		// log.Printf("[] Failed to write to client connection: %v", err)
@@ -186,7 +189,7 @@ func (c *Connection) WriteClient(input []byte) error {
 func (c *Connection) WriteServer(input []byte) error {
 	// log.Printf("Writing to upstream: %s", input.String())
 	// data := input.Encode()
-	// log.Printf("Writing to upstream: %x", input)
+	log.Printf("[server writter Debug]  Writing to server: %x", input)
 	_, err := (*c.ServerConn).Write(input)
 	if err != nil {
 		// log.Printf("Failed to write to upstream connection: %v", err)
@@ -222,8 +225,6 @@ func (c *Connection) CloseConn() error {
 
 func (c *Connection) Destroy() {
 	c.CloseConn()
-	close(c.ServerData)
-	close(c.ClientData)
 	runtime.GC()
 }
 
@@ -266,7 +267,7 @@ func (sm *StateMachine) Run() error {
 }
 
 func (sm *StateMachine) Transition() int {
-	// sm.StateChangeLock.Lock()
+	sm.StateChangeLock.Lock()
 	sm.currentState = sm.currentState.Exit()
 	if sm.currentState == nil {
 		// log.Printf("Exit")
@@ -276,10 +277,10 @@ func (sm *StateMachine) Transition() int {
 		}
 		return STATUS_EXIT
 	}
-	// sm.StateChangeLock.Unlock()
+	sm.StateChangeLock.Unlock()
 	err := sm.currentState.Enter(sm)
 	if err != nil {
-		sm.setState(&RejectState{Message: err.Error()})
+		return STATUS_ERROR
 	}
 	// log.Printf("Action")
 	err = sm.currentState.Action()
@@ -288,8 +289,7 @@ func (sm *StateMachine) Transition() int {
 		if err.Error() == "Context Done" {
 			return STATUS_EXIT
 		}
-		sm.setState(&RejectState{Message: err.Error()})
-		return STATUS_OK
+		return STATUS_ERROR
 	}
 	// log.Printf("Action Done")
 	return STATUS_OK
@@ -327,7 +327,6 @@ func NewStateMachine(listener *net.Listener, serverList map[string]map[string]st
 	}
 	sm.Conn = NewConnection(sm.StateChangeLock, sm.ctx, sm.cancle, listener)
 	sm.Conn.ServerList = serverList
-	sm.Conn.WaitGroup = &sync.WaitGroup{}
 	sm.Conn.ClientData = make(chan []byte)
 	sm.Conn.ServerData = make(chan []byte)
 	return sm

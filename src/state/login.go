@@ -9,7 +9,6 @@ import (
 
 type LoginState struct {
 	sm      *StateMachine
-	conn    *Connection
 	Data    pac.Packet[*pac.PlayerData]
 	OldData []byte
 }

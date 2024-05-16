@@ -186,7 +186,13 @@ func GetServerList() map[string]map[string]string {
 
 func (p *Proxy) Serve() {
 	startTime := time.Now()
-	defer runtime.GC()
+	defer func() {
+		runtime.GC()
+		if r := recover(); r != nil {
+			log.Printf("[Proxy] panic: ", r)
+			return
+		}
+	}()
 
 	statemachine := state.NewStateMachine(p.Listener, GetServerList())
 	err := statemachine.Run() // Block until someone connected

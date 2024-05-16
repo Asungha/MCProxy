@@ -79,22 +79,6 @@ type Handshake struct {
 
 func (h Handshake) ImplPacketData() {}
 
-func (h *Handshake) hexProtocolVersion() string {
-	return fmt.Sprintf("%x", h.ProtocolVersion)
-}
-
-func (h *Handshake) hexPort() string {
-	return fmt.Sprintf("%x", h.Port)
-}
-
-func (h *Handshake) hexNextState() string {
-	return fmt.Sprintf("%x", h.NextState)
-}
-
-func (h *Handshake) hexHostname() string {
-	return fmt.Sprintf("%x", h.Hostname)
-}
-
 func (h *Handshake) encode() ([]byte, error) {
 	hostname := []byte(h.Hostname)
 	protocolVersion := make([]byte, binary.MaxVarintLen64)
@@ -105,8 +89,7 @@ func (h *Handshake) encode() ([]byte, error) {
 	// binary.BigEndian.PutUint16(next_state, uint64(h.NextState))
 	port := make([]byte, 2)
 	binary.BigEndian.PutUint16(port, uint16(h.Port))
-	tail := []byte{0x01, 0x00}
-	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState}, tail)
+	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
 	return raw, nil
 }
 
@@ -165,16 +148,16 @@ func (h *Handshake) Decode(data []byte, size int) error {
 	protocolVersion, v_length := binary.Uvarint(data)
 	// log.Printf("ProtocolVersion: %d, Length: %d", protocolVersion, v_length)
 	if n-v_length <= 0 {
-		return fmt.Errorf("Invalid ProtocolVersion: %d", protocolVersion)
+		return fmt.Errorf("invalid ProtocolVersion: %d", protocolVersion)
 	}
 	h_length, s_length := binary.Uvarint(data[v_length:])
 	// log.Printf("Hostname Length: %d, Length: %d", h_length, s_length)
 	if n-v_length-s_length <= 0 {
-		return fmt.Errorf("Invalid Hostname Length: %d", s_length)
+		return fmt.Errorf("invalid Hostname Length: %d", s_length)
 	}
 	h.ProtocolVersion = int(protocolVersion)
 	if s_length+v_length > n-4 {
-		return fmt.Errorf("Invalid Hostname Length: %d", s_length)
+		return fmt.Errorf("invalid Hostname Length: %d", s_length)
 	}
 	log.Printf("ProtocolVersion: %d", h.ProtocolVersion)
 	h.Hostname = string(data[s_length+v_length : s_length+v_length+int(h_length)])

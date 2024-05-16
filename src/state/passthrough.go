@@ -11,7 +11,6 @@ type PassthroughState struct {
 func (p *PassthroughState) ImplState() {}
 
 func (p *PassthroughState) Enter(sm *StateMachine) error {
-	// log.Printf("Passthrough Enter")
 	p.sm = sm
 	return nil
 }
@@ -31,8 +30,8 @@ func (p *PassthroughState) Action() error {
 		p.sm.Conn.WriteClient(sData)
 		p.sm.StateChangeLock.Unlock()
 		return nil
-	case <-p.sm.Conn.ctx.Done():
+	case <-p.sm.Conn.Ctx.Done():
 		// log.Printf("%v", e)
-		return errors.New("Context Done")
+		return errors.New("context Done")
 	}
 }

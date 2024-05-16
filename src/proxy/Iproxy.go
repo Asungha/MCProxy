@@ -187,6 +187,7 @@ func GetServerList() map[string]map[string]string {
 func (p *Proxy) Serve() {
 	startTime := time.Now()
 	defer func() {
+		log.Printf("[Proxy] Cleanup session")
 		runtime.GC()
 		if r := recover(); r != nil {
 			log.Printf("[Proxy] panic: ", r)

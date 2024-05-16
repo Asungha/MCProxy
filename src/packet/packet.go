@@ -31,7 +31,7 @@ func (p *Packet[T]) Decode(b *[]byte, maxsize int) error {
 					pv := binary.BigEndian.Uint16(utils.Concat([]byte{0x00}, (*b)[29:30]))
 					log.Printf("[Packet Decoder] Data length: %d", size)
 					protocolVersion := make([]byte, 64)
-					pv_n := binary.PutUvarint(protocolVersion, uint64(pv))
+					pv_n := binary.PutUvarint(protocolVersion, uint64(765)) // hardcode
 					log.Printf("[Packet Decoder] Protocol version %x (%d)", (*b)[29:30], pv)
 					host_l := binary.BigEndian.Uint16((*b)[30:32])
 					log.Printf("[Packet Decoder] Hostname length %x (%d)", (*b)[30:32], host_l)
@@ -43,7 +43,7 @@ func (p *Packet[T]) Decode(b *[]byte, maxsize int) error {
 						return err
 					}
 					port := (*b)[len(*b)-2:]
-					data := utils.Concat(protocolVersion[:pv_n], hostNameLength[:h_n], hostname_b, port, []byte{0x01})
+					data := utils.Concat(protocolVersion[:pv_n], hostNameLength[:h_n], hostname_b, port, []byte{0x01, 0x01, 0x00})
 					log.Printf("[Packet Decoder] Reformatted data: %x", data)
 					return p.Data.Decode(data, len(data))
 				}

@@ -73,8 +73,8 @@ type Handshake struct {
 	NextState       byte
 	Type            int
 	// PlayerData      *Packet[*PlayerData]
-	PlayerData []byte
-	tail       []byte
+	// PlayerData []byte
+	Tail []byte
 }
 
 func (h Handshake) ImplPacketData() {}
@@ -110,10 +110,10 @@ func (h *Handshake) Encode() ([]byte, error) {
 	// 	return nil, err
 	// }
 
-	var tail []byte = []byte{}
-	if h.tail != nil {
-		tail = h.tail
-	}
+	// var tail []byte = []byte{}
+	// if h.Tail != nil {
+	// 	tail = h.Tail
+	// }
 	// if h.PlayerData != nil && h.NextState == 0x02 {
 	// 	playerData, err := h.PlayerData.Encode()
 	// 	if err != nil {
@@ -123,8 +123,15 @@ func (h *Handshake) Encode() ([]byte, error) {
 	// } else {
 	// tail = []byte{0x01, 0x00}
 	// }
+	// if h.Tail != nil {
+	// 	if bytes.Equal(h.Tail, []byte{0x01, 0x00}) {
+	// 		tail = []byte{0x01, 0x00}
+	// 	} else {
+	// 		tail = h.Tail
+	// 	}
+	// }
 
-	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState}, tail)
+	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
 	// log.Printf("Raw: %x", raw)
 
 	return raw, nil
@@ -169,11 +176,7 @@ func (h *Handshake) Decode(data []byte, size int) error {
 	h.NextState = data[v_length+int(h_length)+3 : v_length+int(h_length)+3+1][0]
 	remainingData := data[v_length+int(h_length)+3+1:]
 	if l := len(remainingData); l != 0 {
-		if l == 2 {
-			h.tail = remainingData
-			return nil
-		}
-		h.PlayerData = remainingData
+		h.Tail = remainingData
 	}
 	// if h.NextState == 2 { // login
 	// 	d := data[v_length+s_length+int(h_length)+3:]
@@ -211,7 +214,7 @@ func (h *Handshake) Length() int {
 	if err != nil {
 		return -1
 	}
-	return len(data) - 3
+	return len(data) - 1
 }
 
 func (h *Handshake) Destroy() {

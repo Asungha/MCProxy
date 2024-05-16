@@ -58,10 +58,10 @@ func (h *HandshakeState) Action() error {
 				log.Printf("[handshake state] Handshake packet send failed %v", err)
 				return err
 			}
-			if h.Data.Data.PlayerData != nil {
-				err = h.sm.Conn.WriteServer(h.Data.Data.PlayerData)
+			if h.Data.Data.Tail != nil {
+				err = h.sm.Conn.WriteServer(h.Data.Data.Tail)
 				if err != nil {
-					log.Printf("[handshake state] Player data packet send failed %v", err)
+					log.Printf("[handshake state] additional packet send failed %v", err)
 					return err
 				}
 			}

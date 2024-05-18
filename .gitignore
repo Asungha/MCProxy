@@ -1,0 +1,6 @@
+test
+**/*.json
+**/*.exe
+**/*.log
+**/*.bin
+**/*.text

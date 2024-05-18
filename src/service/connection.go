@@ -39,6 +39,7 @@ func (c *Connection) WaitClientConnection() error {
 	log.Printf("[Proxy] Initiated connection between %s and %s", clientConn.RemoteAddr().String(), "localhost:25565")
 	// clientConn.SetDeadline(time.Now().Add(5 * time.Second))
 	c.ClientConn = &clientConn
+	c.ClientAddress = clientConn.RemoteAddr().String()
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	Logger "mc_reverse_proxy/src/logger"
 	service "mc_reverse_proxy/src/service"
 	"net"
 	"runtime"
@@ -45,10 +46,15 @@ type StateMachine struct {
 	StateChangeLock *sync.Mutex
 	ctx             context.Context
 	cancle          context.CancelCauseFunc
+	logger          *Logger.Logger
 }
 
 func (sm *StateMachine) setState(s IState) {
 	sm.currentState = s
+}
+
+func (sm *StateMachine) PushLog(log Logger.Log) error {
+	return sm.logger.Append(log)
 }
 
 func (sm *StateMachine) Run() error {
@@ -114,7 +120,7 @@ type Event struct {
 	Data map[string]string
 }
 
-func NewStateMachine(listener *net.Listener, serverList map[string]map[string]string) *StateMachine {
+func NewStateMachine(listener *net.Listener, serverList map[string]map[string]string, logger *Logger.Logger) *StateMachine {
 	ctx, cancle := context.WithCancelCause(context.Background())
 	sm := &StateMachine{
 		currentState:    &InitState{},
@@ -122,6 +128,7 @@ func NewStateMachine(listener *net.Listener, serverList map[string]map[string]st
 		StateChangeLock: &sync.Mutex{},
 		ctx:             ctx,
 		cancle:          cancle,
+		logger:          logger,
 	}
 	sm.Conn = service.NewConnection(sm.StateChangeLock, sm.ctx, sm.cancle, listener)
 	sm.Conn.ServerList = serverList

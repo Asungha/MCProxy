@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"log"
+	Logger "mc_reverse_proxy/src/logger"
 	state "mc_reverse_proxy/src/state"
 	"net"
 	"os"
@@ -23,6 +24,8 @@ type Proxy struct {
 	routerLock sync.Mutex
 
 	threadWaitGroup *sync.WaitGroup
+
+	logger *Logger.Logger
 }
 
 func (p *Proxy) ImplProxy() {}
@@ -195,7 +198,7 @@ func (p *Proxy) Serve() {
 		}
 	}()
 
-	statemachine := state.NewStateMachine(p.Listener, GetServerList())
+	statemachine := state.NewStateMachine(p.Listener, GetServerList(), p.logger)
 	err := statemachine.Run() // Block until someone connected
 	if err != nil {
 		log.Printf("[Proxy] Connection accept failed: %v", err)
@@ -220,7 +223,7 @@ func (p *Proxy) Serve() {
 	}(statemachine)
 }
 
-func NewProxy(port string) (Iproxy, error) {
+func NewProxy(port string, logger *Logger.Logger) (Iproxy, error) {
 	config := map[string]string{}
 	config_file, err := os.Open("config.json")
 	if err != nil {
@@ -240,5 +243,5 @@ func NewProxy(port string) (Iproxy, error) {
 		return nil, err
 	}
 	log.Printf("[Proxy] Accepting connection at %s", listenAddr)
-	return &Proxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}}, nil
+	return &Proxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}, logger: logger}, nil
 }

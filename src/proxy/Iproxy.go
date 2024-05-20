@@ -188,7 +188,6 @@ func GetServerList() map[string]map[string]string {
 }
 
 func (p *Proxy) Serve() {
-	startTime := time.Now()
 	defer func() {
 		log.Printf("[Proxy] Cleanup session")
 		runtime.GC()
@@ -208,7 +207,7 @@ func (p *Proxy) Serve() {
 
 	log.Printf("[Proxy] Connection between proxy and client established")
 	// p.threadWaitGroup.Add(1)
-	go func(_sm *state.StateMachine) {
+	go func(_sm *state.StateMachine, startTime time.Time) {
 		// defer p.threadWaitGroup.Done()
 		for {
 			switch _sm.Transition() {
@@ -220,7 +219,7 @@ func (p *Proxy) Serve() {
 				return
 			}
 		}
-	}(statemachine)
+	}(statemachine, time.Now())
 }
 
 func NewProxy(port string, logger *Logger.Logger) (Iproxy, error) {

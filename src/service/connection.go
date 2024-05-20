@@ -75,7 +75,7 @@ func (c *Connection) ListenClient() error {
 			buf := make([]byte, 1024)
 			// (*c.ClientConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ClientConn).Read(buf)
-			log.Printf("[client listener Debug] Reading %d bytes from client: %x", n, buf[:n])
+			// log.Printf("[client listener Debug] Reading %d bytes from client: %x", n, buf[:n])
 			if err != nil {
 				log.Printf("[client listener] Failed to read from client connection: %v", err)
 				c.Cancle(err)
@@ -120,7 +120,7 @@ func (c *Connection) ListenServer() error {
 			buf := make([]byte, 1024)
 			// (*c.ServerConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ServerConn).Read(buf)
-			log.Printf("[server listener Debug] Reading %d bytes from upstream: %x", n, buf[:n])
+			// log.Printf("[server listener Debug] Reading %d bytes from upstream: %x", n, buf[:n])
 			if err != nil {
 				log.Printf("[server listener] Failed to read from upstream connection: %v", err)
 				c.Cancle(err)

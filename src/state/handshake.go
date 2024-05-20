@@ -39,6 +39,7 @@ func (h *HandshakeState) Action() error {
 		if target, ok := data["target"]; ok {
 			err := h.sm.Conn.ConnectServer(target)
 			if err != nil {
+				h.sm.errorMetric.ServerConnectFailed += 1
 				return err
 			}
 			err = h.sm.Conn.PreConditionCheck()
@@ -49,6 +50,7 @@ func (h *HandshakeState) Action() error {
 			go h.sm.Conn.ListenServer()
 			hs_packet, err := h.Data.Encode()
 			if err != nil {
+				h.sm.errorMetric.PacketDeserializeFailed += 1
 				log.Printf("[handshake state] Encode handshale failed %v", err)
 				return err
 			}
@@ -70,6 +72,7 @@ func (h *HandshakeState) Action() error {
 		}
 		return errors.New("[Handshake State] host config file malformed")
 	}
+	h.sm.errorMetric.HostnameResolveFailed += 1
 	return errors.New(fmt.Sprintf("[Handshake State] Host %s not found", h.hostname))
 }
 
@@ -81,6 +84,7 @@ func (h *HandshakeState) Exit() IState {
 	}
 	if h.Data.Data.NextState == 0x01 {
 		if h.hostname != "" {
+			h.sm.proxyMetric.PlayerGetStatus += 1
 			log.Printf("[state machine: Handshake] Handshake for status request done")
 			return &PassthroughState{}
 		} else {
@@ -88,6 +92,9 @@ func (h *HandshakeState) Exit() IState {
 			return nil
 		}
 	} else {
+		h.sm.proxyMetric.PlayerLogin += 1
+		h.sm.proxyMetric.PlayerPlaying += 1
+		h.sm.PlayerPlaying = true
 		log.Printf("[state machine: Handshake] Handshake for login request done")
 		return &PassthroughState{}
 	}

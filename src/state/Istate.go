@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"log"
-	Logger "mc_reverse_proxy/src/logger"
+	metric "mc_reverse_proxy/src/logger"
 	service "mc_reverse_proxy/src/service"
 	"net"
 	"runtime"
 	"sync"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -39,23 +42,53 @@ const (
 	STATUS_ERROR
 )
 
+type IStateMachine interface {
+	Transition() int
+	Run() error
+	Destroy()
+	metric.Loggable
+}
+
 type StateMachine struct {
+	uuid            string
 	Conn            service.Connection
 	currentState    IState
 	states          map[string]IState
 	StateChangeLock *sync.Mutex
 	ctx             context.Context
 	cancle          context.CancelCauseFunc
-	logger          *Logger.Logger
+
+	PlayerPlaying bool
+
+	errorMetric *metric.ErrorMetric
+	proxyMetric *metric.ProxyMetric
+}
+
+func (sm *StateMachine) UUID() string {
+	return sm.uuid
+}
+
+func (sm *StateMachine) Log() metric.Log {
+	return metric.Log{
+		Timestamp: time.Now(),
+		// IP:            sm.Conn.ClientAddress,
+		// Action:        metric.UNKNOWN,
+		// State:         "",
+		// Host:          sm.Conn.TargetHostname,
+		// Playername:    "",
+		// Message:       "",
+		NetworkMetric: sm.Conn.NetworkMetric,
+		// ErrorMetric:   *sm.errorMetric,
+	}
 }
 
 func (sm *StateMachine) setState(s IState) {
 	sm.currentState = s
 }
 
-func (sm *StateMachine) PushLog(log Logger.Log) error {
-	return sm.logger.Append(log)
-}
+// func (sm *StateMachine) PushLog(log Logger.Log) error {
+// 	return sm.logger.Append(log)
+// }
 
 func (sm *StateMachine) Run() error {
 	// sm.StateChangeLock.Lock()
@@ -100,6 +133,9 @@ func (sm *StateMachine) Transition() int {
 }
 
 func (sm *StateMachine) Destroy() {
+	if sm.PlayerPlaying {
+		sm.proxyMetric.PlayerPlaying -= 1
+	}
 	sm.cancle(errors.New("force closed"))
 	sm.Conn.Cancle(errors.New("force closed"))
 	sm.Conn.CloseConn()
@@ -120,15 +156,17 @@ type Event struct {
 	Data map[string]string
 }
 
-func NewStateMachine(listener *net.Listener, serverList map[string]map[string]string, logger *Logger.Logger) *StateMachine {
+func NewStateMachine(listener *net.Listener, serverList map[string]map[string]string, em *metric.ErrorMetric, pm *metric.ProxyMetric) IStateMachine {
 	ctx, cancle := context.WithCancelCause(context.Background())
 	sm := &StateMachine{
+		uuid:            uuid.NewString(),
 		currentState:    &InitState{},
 		states:          make(map[string]IState),
 		StateChangeLock: &sync.Mutex{},
 		ctx:             ctx,
 		cancle:          cancle,
-		logger:          logger,
+		proxyMetric:     pm,
+		errorMetric:     em,
 	}
 	sm.Conn = service.NewConnection(sm.StateChangeLock, sm.ctx, sm.cancle, listener)
 	sm.Conn.ServerList = serverList

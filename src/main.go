@@ -2,19 +2,24 @@ package main
 
 import (
 	"log"
-	Logger "mc_reverse_proxy/src/logger"
 	proxy "mc_reverse_proxy/src/proxy"
 )
 
 func main() {
-	logger := Logger.NewLogger()
-	err := logger.Init()
-	if err != nil {
-		log.Printf("[Proxy] Init logger error: %v", err)
-	}
-	go logger.Start()
-	defer logger.Destroy()
-	p, err := proxy.NewProxy("25565", logger)
+	p, err := proxy.NewProxy("25565")
+	// ticker := time.NewTicker(5 * time.Second)
+	// go func() {
+	// 	for {
+	// 		select {
+	// 		case <-ticker.C:
+	// 			m, err := p.GetMC().Collect()
+	// 			if err != nil {
+	// 				log.Printf("[MC] error: %v", err)
+	// 			}
+	// 			log.Printf("%s", m.GetMetric())
+	// 		}
+	// 	}
+	// }()
 	if err != nil {
 		panic(err.Error())
 	} else {

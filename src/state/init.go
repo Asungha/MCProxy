@@ -2,7 +2,6 @@ package state
 
 import (
 	"log"
-	Logger "mc_reverse_proxy/src/logger"
 )
 
 type InitState struct {
@@ -22,8 +21,8 @@ func (init *InitState) Enter(sm *StateMachine) error {
 		return err
 	}
 	log.Printf("Creating log")
-	log := Logger.NewLog(init.sm.Conn.ClientAddress, Logger.CONNECT, "Init", nil, nil, nil)
-	init.sm.PushLog(log)
+	// log := Logger.NewLog(init.sm.Conn.ClientAddress, Logger.CONNECT, "Init", nil, nil, nil)
+	// init.sm.PushLog(log)
 	// log.Printf("got connection")
 	// init.sm.Conn.WaitGroup.Add(1)
 	go init.sm.Conn.ListenClient()

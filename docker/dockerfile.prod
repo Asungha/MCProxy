@@ -1,40 +1,40 @@
 # ----- build stage -----
-    FROM golang:alpine AS build-stage
-    WORKDIR /app
-    
-    COPY go.mod /app/go.mod
-    COPY go.sum /app/go.sum
-    
-    RUN go mod download
-    
-    RUN apk add --no-cache git
-    RUN go install mvdan.cc/garble@latest
-    
-    COPY src /app/src
-    
-    WORKDIR /app/src
-    RUN garble -tiny -literals -seed=random build -o api-server
-    # RUN go build -o api-server
-    
-    
-    
-    # ----- production stage -----
-    FROM alpine:latest AS production-stage
-    
-    RUN addgroup -S golang && adduser -S golang -G golang
-    USER golang
-    
-    WORKDIR /mc_reverse_proxy
-    
-    RUN chmod -R g=u /mc_reverse_proxy
-    
-    # Copy the built Go executable from the build stage
-    COPY --from=build-stage --chown=golang:golang /app/src/api-server /mc_reverse_proxy/api-server
-    
-    COPY --chown=golang:golang ./config.json /mc_reverse_proxy/config.json
-    COPY --chown=golang:golang ./host.json /mc_reverse_proxy/host.json
-    
-    RUN chmod +x /mc_reverse_proxy/api-server
-    
-    EXPOSE 25565
-    CMD ["/mc_reverse_proxy/api-server"]
+FROM golang:alpine AS build-stage
+WORKDIR /app
+
+COPY go.mod /app/go.mod
+COPY go.sum /app/go.sum
+
+RUN go mod download
+
+RUN apk add --no-cache git
+RUN go install mvdan.cc/garble@latest
+
+COPY src /app/src
+
+WORKDIR /app/src
+RUN garble -tiny -literals -seed=random build -o api-server
+# RUN go build -o api-server
+
+
+
+# ----- production stage -----
+FROM alpine:latest AS production-stage
+
+RUN addgroup -S golang && adduser -S golang -G golang
+USER golang
+
+WORKDIR /mc_reverse_proxy
+
+RUN chmod -R g=u /mc_reverse_proxy
+
+# Copy the built Go executable from the build stage
+COPY --from=build-stage --chown=golang:golang /app/src/api-server /mc_reverse_proxy/api-server
+
+COPY --chown=golang:golang ./config.json /mc_reverse_proxy/config.json
+COPY --chown=golang:golang ./host.json /mc_reverse_proxy/host.json
+
+RUN chmod +x /mc_reverse_proxy/api-server
+
+EXPOSE 25565
+CMD ["/mc_reverse_proxy/api-server"]

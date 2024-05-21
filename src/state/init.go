@@ -20,6 +20,9 @@ func (init *InitState) Enter(sm *StateMachine) error {
 		log.Printf(err.Error())
 		return err
 	}
+	log.Printf("Creating log")
+	// log := Logger.NewLog(init.sm.Conn.ClientAddress, Logger.CONNECT, "Init", nil, nil, nil)
+	// init.sm.PushLog(log)
 	// log.Printf("got connection")
 	// init.sm.Conn.WaitGroup.Add(1)
 	go init.sm.Conn.ListenClient()

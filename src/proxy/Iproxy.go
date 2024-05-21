@@ -3,10 +3,12 @@ package proxy
 import (
 	"encoding/json"
 	"log"
+	metric "mc_reverse_proxy/src/logger"
 	state "mc_reverse_proxy/src/state"
 	"net"
 	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -15,6 +17,9 @@ type Iproxy interface {
 	ImplProxy()
 
 	Serve()
+	GetMC() *metric.MetricCollecter
+	UseMetricExporter(uint)
+	// metric.Loggable
 }
 
 type Proxy struct {
@@ -23,138 +28,35 @@ type Proxy struct {
 	routerLock sync.Mutex
 
 	threadWaitGroup *sync.WaitGroup
+
+	MetricCollector *metric.MetricCollecter
+
+	ProxyMetric metric.ProxyMetric
+	ErrorMetric metric.ErrorMetric
+
+	metricExporter metric.IMetricExporter
+
+	init bool
+
+	// logger *Logger.Logger
 }
 
 func (p *Proxy) ImplProxy() {}
 
-// func (p *Proxy) WaitForConnection() error {
-// 	clientConn, err := (*GetListener(p.ListenAddress)).Accept()
-// 	if err != nil {
-// 		log.Printf("Failed to accept client connection: %v", err)
-// 		return err
-// 	}
-// 	log.Printf("[Inbound] Initiating connection between %s and %s", clientConn.RemoteAddr().String(), "localhost:25565")
-// 	// clientConn.SetDeadline(time.Now().Add(5 * time.Second))
-// 	p.client = &clientConn
-// 	return nil
-// }
+func (p *Proxy) UUID() string {
+	return "0"
+}
 
-// func (p *Proxy) SetUpStreams(host string) error {
-// 	upstreamConn, err := net.Dial("tcp", host)
-// 	if err != nil {
-// 		log.Printf("Failed to connect to upstream server: %v", err)
-// 		return err
-// 	}
-// 	log.Printf("[Outbound] Initiated connection between %s and %s", "proxy", upstreamConn.RemoteAddr().String())
-// 	// upstreamConn.SetDeadline(time.Now().Add(5 * time.Second))
-// 	p.upstream = &upstreamConn
-// 	return nil
-// }
+func (p *Proxy) Log() metric.Log {
+	return metric.Log{
+		ProxyMetric: p.ProxyMetric,
+		ErrorMetric: p.ErrorMetric,
+	}
+}
 
-// func (p *Proxy) preConditionCheck() error {
-// 	if p.client == nil {
-// 		return errors.New("Client connection not established")
-// 	}
-// 	if p.upstream == nil {
-// 		return errors.New("Upstream connection not established")
-// 	}
-// 	return nil
-// }
-
-// func (p *Proxy) listenClient(wg *sync.WaitGroup, ctx context.Context, cancleFunc context.CancelCauseFunc, output chan []byte) error {
-// 	defer wg.Done()
-// 	for {
-// 		buf := make([]byte, 512)
-// 		n, err := (*p.client).Read(buf)
-// 		// log.Printf("Reading from client: %x", buf[:n])
-// 		if err != nil {
-// 			// log.Printf("Failed to read from client connection: %v", err)
-// 			cancleFunc(err)
-// 			buf = nil
-// 			return err
-// 		}
-// 		data := buf[:n]
-// 		// packet := pac.NewPacket(&pac.Raw{})
-// 		// err = packet.Decode(&data, len(data))
-// 		// if err != nil {
-// 		// 	log.Printf("Failed to decode packet: %v", err)
-// 		// 	cancleFunc(err)
-// 		// 	return err
-// 		// }
-// 		// p.routerLock.Lock()
-// 		output <- data
-// 		// p.routerLock.Unlock()
-// 		buf = nil
-// 	}
-// }
-
-// func (p *Proxy) listenUpstream(wg *sync.WaitGroup, ctx context.Context, cancleFunc context.CancelCauseFunc, output chan []byte) error {
-// 	defer wg.Done()
-// 	for {
-// 		buf := make([]byte, 512)
-// 		n, err := (*p.upstream).Read(buf)
-// 		if n == 0 {
-// 			continue
-// 		}
-// 		log.Printf("Reading %d from upstream: %x", n, buf[:n])
-// 		if err != nil {
-// 			// log.Printf("Failed to read from upstream connection: %v", err)
-// 			cancleFunc(err)
-// 			buf = nil
-// 			return err
-// 		}
-// 		data := buf[:n]
-// 		// packet := pac.NewPacket(&pac.Raw{})
-// 		// err = packet.Decode(&data, len(data))
-// 		// if err != nil {
-// 		// 	log.Printf("Failed to decode packet: %v", err)
-// 		// 	cancleFunc(err)
-// 		// 	return err
-// 		// }
-// 		// p.routerLock.Lock()
-// 		output <- data
-// 		// p.routerLock.Unlock()
-// 		buf = nil
-// 	}
-// }
-
-// func (p *Proxy) writeClient(ctx context.Context, cancleFunc context.CancelCauseFunc, input []byte) error {
-// 	// log.Printf("Writing to client: %s", input.String())
-// 	// data := input.Encode()
-// 	// log.Printf("Writing hex to client: %x", input)
-// 	_, err := (*p.client).Write(input)
-// 	if err != nil {
-// 		// log.Printf("Failed to write to client connection: %v", err)
-// 		cancleFunc(err)
-// 		return err
-// 	}
-// 	return nil
-// }
-
-// func (p *Proxy) writeUpstream(ctx context.Context, cancleFunc context.CancelCauseFunc, input []byte) error {
-// 	// log.Printf("Writing to upstream: %s", input.String())
-// 	// data := input.Encode()
-// 	// log.Printf("Writing to upstream: %x", input)
-// 	_, err := (*p.upstream).Write(input)
-// 	if err != nil {
-// 		// log.Printf("Failed to write to upstream connection: %v", err)
-// 		cancleFunc(err)
-// 		return err
-// 	}
-// 	return nil
-// }
-
-// func (p *Proxy) Close() error {
-// 	if p.client != nil {
-// 		(*p.client).Close()
-// 		p.client = nil
-// 	}
-// 	if p.upstream != nil {
-// 		(*p.upstream).Close()
-// 		p.upstream = nil
-// 	}
-// 	return nil
-// }
+func (p *Proxy) UseMetricExporter(port uint) {
+	p.metricExporter = &metric.PrometheusExporter{MetricCollecter: p.MetricCollector, Port: port}
+}
 
 var serverlist map[string]map[string]string
 
@@ -184,17 +86,28 @@ func GetServerList() map[string]map[string]string {
 	return serverlist
 }
 
+func (p *Proxy) GetMC() *metric.MetricCollecter {
+	return p.MetricCollector
+}
+
 func (p *Proxy) Serve() {
 	defer func() {
 		log.Printf("[Proxy] Cleanup session")
 		runtime.GC()
-		if r := recover(); r != nil {
-			log.Printf("[Proxy] panic: ", r)
-			return
-		}
+		// if r := recover(); r != nil {
+		// 	log.Printf("[Proxy] panic: ", r)
+		// 	return
+		// }
 	}()
 
-	statemachine := state.NewStateMachine(p.Listener, GetServerList())
+	if p.metricExporter != nil && !p.init {
+		go func(p *Proxy) {
+			p.metricExporter.Serve()
+		}(p)
+		p.init = true
+	}
+
+	statemachine := state.NewStateMachine(p.Listener, GetServerList(), &p.ErrorMetric, &p.ProxyMetric)
 	err := statemachine.Run() // Block until someone connected
 	if err != nil {
 		log.Printf("[Proxy] Connection accept failed: %v", err)
@@ -203,8 +116,9 @@ func (p *Proxy) Serve() {
 	}
 
 	log.Printf("[Proxy] Connection between proxy and client established")
+	p.MetricCollector.Register(statemachine)
 	// p.threadWaitGroup.Add(1)
-	go func(_sm *state.StateMachine, startTime time.Time) {
+	go func(_sm state.IStateMachine, startTime time.Time) {
 		// defer p.threadWaitGroup.Done()
 		for {
 			switch _sm.Transition() {
@@ -239,5 +153,16 @@ func NewProxy(port string) (Iproxy, error) {
 		return nil, err
 	}
 	log.Printf("[Proxy] Accepting connection at %s", listenAddr)
-	return &Proxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}}, nil
+	proxy := &Proxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}, MetricCollector: metric.NewMetricCollector()}
+	proxy.MetricCollector.Register(proxy)
+	if v, ok := config["prometheus_port"]; ok {
+		port, err := strconv.ParseInt(v, 10, 16)
+		if err != nil {
+			proxy.UseMetricExporter(8080) // default
+		} else {
+			proxy.UseMetricExporter(uint(port))
+		}
+
+	}
+	return proxy, nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	metric "mc_reverse_proxy/src/logger"
 	"net"
 	"runtime"
 	"sync"
@@ -24,6 +25,8 @@ type Connection struct {
 	StateChangeLock *sync.Mutex
 	Listener        *net.Listener
 
+	NetworkMetric metric.NetworkMetric
+
 	// ListenAddress string
 }
 
@@ -39,6 +42,7 @@ func (c *Connection) WaitClientConnection() error {
 	log.Printf("[Proxy] Initiated connection between %s and %s", clientConn.RemoteAddr().String(), "localhost:25565")
 	// clientConn.SetDeadline(time.Now().Add(5 * time.Second))
 	c.ClientConn = &clientConn
+	c.ClientAddress = clientConn.RemoteAddr().String()
 	return nil
 }
 
@@ -85,6 +89,8 @@ func (c *Connection) ListenClient() error {
 			if n == 0 {
 				continue
 			}
+			c.NetworkMetric.ClientPacketRx += 1
+			c.NetworkMetric.ClientDataRx += uint(n)
 			data := buf[:n]
 			// c.StateChangeLock.Lock()
 			// log.Printf("Sending data")
@@ -130,6 +136,8 @@ func (c *Connection) ListenServer() error {
 			if n == 0 {
 				continue
 			}
+			c.NetworkMetric.ServerPacketRx += 1
+			c.NetworkMetric.ServerDataRx += uint(n)
 			data := buf[:n]
 			// c.StateChangeLock.Lock()
 			c.ServerData <- data
@@ -156,26 +164,30 @@ func (c *Connection) ListenServer() error {
 func (c *Connection) WriteClient(input []byte) error {
 	// log.Printf("Writing to client: %s", input.String())
 	// data := input.Encode()
-	log.Printf("[client writter Debug] Writing data to client: %x", input)
-	_, err := (*c.ClientConn).Write(input)
+	// log.Printf("[client writter Debug] Writing data to client: %x", input)
+	n, err := (*c.ClientConn).Write(input)
 	if err != nil {
 		// log.Printf("[] Failed to write to client connection: %v", err)
 		c.Cancle(err)
 		return err
 	}
+	c.NetworkMetric.ClientPacketTx += 1
+	c.NetworkMetric.ClientDataTx += uint(n)
 	return nil
 }
 
 func (c *Connection) WriteServer(input []byte) error {
 	// log.Printf("Writing to upstream: %s", input.String())
 	// data := input.Encode()
-	log.Printf("[server writter Debug]  Writing to server: %x", input)
-	_, err := (*c.ServerConn).Write(input)
+	// log.Printf("[server writter Debug]  Writing to server: %x", input)
+	n, err := (*c.ServerConn).Write(input)
 	if err != nil {
 		// log.Printf("Failed to write to upstream connection: %v", err)
 		c.Cancle(err)
 		return err
 	}
+	c.NetworkMetric.ServerPacketTx += 1
+	c.NetworkMetric.ServerDataTx += uint(n)
 	return nil
 }
 
@@ -209,5 +221,5 @@ func (c *Connection) Destroy() {
 }
 
 func NewConnection(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) Connection {
-	return Connection{StateChangeLock: mutex, Ctx: ctx, Cancle: cancle, Listener: listener}
+	return Connection{StateChangeLock: mutex, Ctx: ctx, Cancle: cancle, Listener: listener, NetworkMetric: metric.NetworkMetric{}}
 }

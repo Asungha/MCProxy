@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	metric "mc_reverse_proxy/src/logger"
+	metric "mc_reverse_proxy/src/metric"
 	"net"
 	"runtime"
 	"sync"
@@ -95,7 +95,7 @@ func (c *Connection) ListenClient() error {
 			// c.StateChangeLock.Lock()
 			// log.Printf("Sending data")
 			c.ClientData <- data
-			// log.Printf("Sending data done")
+			// log.Printf("Sending datato %v done", c.ClientData)
 			// c.StateChangeLock.Unlock()
 			buf = nil
 		}
@@ -220,6 +220,6 @@ func (c *Connection) Destroy() {
 	runtime.GC()
 }
 
-func NewConnection(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) Connection {
-	return Connection{StateChangeLock: mutex, Ctx: ctx, Cancle: cancle, Listener: listener, NetworkMetric: metric.NetworkMetric{}}
+func NewConnection(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) *Connection {
+	return &Connection{StateChangeLock: mutex, Ctx: ctx, Cancle: cancle, Listener: listener, NetworkMetric: metric.NetworkMetric{}}
 }

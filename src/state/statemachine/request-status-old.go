@@ -1,4 +1,4 @@
-package state
+package statemachine
 
 // import (
 // 	pac "mc_reverse_proxy/src/packet"

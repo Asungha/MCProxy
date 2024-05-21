@@ -3,14 +3,12 @@ package proxy
 import (
 	"encoding/json"
 	"log"
-	metric "mc_reverse_proxy/src/logger"
-	state "mc_reverse_proxy/src/state"
+	metric "mc_reverse_proxy/src/metric"
+	statemachine "mc_reverse_proxy/src/state/statemachine"
 	"net"
 	"os"
-	"runtime"
 	"strconv"
 	"sync"
-	"time"
 )
 
 type Iproxy interface {
@@ -83,6 +81,7 @@ func GetServerList() map[string]map[string]string {
 		}
 		serverlist = backends
 	}
+	log.Printf("server list %v", serverlist)
 	return serverlist
 }
 
@@ -91,14 +90,14 @@ func (p *Proxy) GetMC() *metric.MetricCollecter {
 }
 
 func (p *Proxy) Serve() {
-	defer func() {
-		log.Printf("[Proxy] Cleanup session")
-		runtime.GC()
-		// if r := recover(); r != nil {
-		// 	log.Printf("[Proxy] panic: ", r)
-		// 	return
-		// }
-	}()
+	// defer func() {
+	// 	log.Printf("[Proxy] Cleanup session")
+	// 	runtime.GC()
+	// 	// if r := recover(); r != nil {
+	// 	// 	log.Printf("[Proxy] panic: ", r)
+	// 	// 	return
+	// 	// }
+	// }()
 
 	if p.metricExporter != nil && !p.init {
 		go func(p *Proxy) {
@@ -107,30 +106,34 @@ func (p *Proxy) Serve() {
 		p.init = true
 	}
 
-	statemachine := state.NewStateMachine(p.Listener, GetServerList(), &p.ErrorMetric, &p.ProxyMetric)
-	err := statemachine.Run() // Block until someone connected
-	if err != nil {
-		log.Printf("[Proxy] Connection accept failed: %v", err)
-		// p.StateMachine.Destroy()
-		return
-	}
+	statemachine := statemachine.NewNetworkStatemachine(p.Listener, GetServerList())
+	// go statemachine.Run()
+	<-statemachine.ClientConnected
+
+	// statemachine := statemachine.NewNetworkStatemachine(p.Listener, GetServerList(), &p.ErrorMetric, &p.ProxyMetric)
+	// err := statemachine.Run() // Block until someone connected
+	// if err != nil {
+	// 	log.Printf("[Proxy] Connection accept failed: %v", err)
+	// 	// p.StateMachine.Destroy()
+	// 	return
+	// }
 
 	log.Printf("[Proxy] Connection between proxy and client established")
 	p.MetricCollector.Register(statemachine)
-	// p.threadWaitGroup.Add(1)
-	go func(_sm state.IStateMachine, startTime time.Time) {
-		// defer p.threadWaitGroup.Done()
-		for {
-			switch _sm.Transition() {
-			case state.STATUS_OK:
-				continue
-			default:
-				log.Printf("[Proxy] Connection Terminated after %v", time.Since(startTime))
-				_sm.Destroy()
-				return
-			}
-		}
-	}(statemachine, time.Now())
+	// // p.threadWaitGroup.Add(1)
+	// go func(_sm state.IStateMachine, startTime time.Time) {
+	// 	// defer p.threadWaitGroup.Done()
+	// 	for {
+	// 		switch _sm.Transition() {
+	// 		case state.STATUS_OK:
+	// 			continue
+	// 		default:
+	// 			log.Printf("[Proxy] Connection Terminated after %v", time.Since(startTime))
+	// 			_sm.Destroy()
+	// 			return
+	// 		}
+	// 	}
+	// }(statemachine, time.Now())
 }
 
 func NewProxy(port string) (Iproxy, error) {

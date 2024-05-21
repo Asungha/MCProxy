@@ -1,57 +1,57 @@
 package state
 
-// import (
-// 	"errors"
-// 	pac "mc_reverse_proxy/src/packet"
-// )
+import (
+	"errors"
+	"log"
+	pac "mc_reverse_proxy/src/packet"
+	"mc_reverse_proxy/src/utils"
+)
 
-// type LoginRequestState struct {
-// 	data pac.Packet[*pac.Raw]
-// }
+type LoginState struct {
+	sm      *StateMachine
+	Data    pac.Packet[*pac.PlayerData]
+	OldData []byte
+}
 
-// func (l *LoginRequestState) ImplState() {}
+func (h *LoginState) ImplState() {}
 
-// func (l *LoginRequestState) Enter(data pac.Packet[pac.IPacketData]) error {
-// 	res, err := pac.CastPacket[*pac.Raw](data)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	l.data = res
-// 	return nil
-// }
+func (h *LoginState) Enter(sm *StateMachine) error {
+	log.Printf("[state machine: Login] Enter login state")
+	h.sm = sm
+	// log.Printf("%v", &h.sm.Conn.ClientData)
+	// log.Printf("%v | %v", h.sm.Conn, h.sm.Conn.ClientConn)
+	select {
+	case rawData := <-h.sm.Conn.ClientData:
+		// log.Printf("%x", rawData)
+		pd := pac.PlayerData{}
+		pd_pac := pac.Packet[*pac.PlayerData]{Data: &pd}
+		err := pd_pac.Decode(&rawData, len(rawData))
+		if err != nil {
+			return err
+		}
+		h.Data = pd_pac
+		// log.Printf("%s %s", h.hostname, data.String())
+		return nil
+	case <-h.sm.ctx.Done():
+		return errors.New("Context Done")
+	}
+	// log.Printf("Data %x", rawData)
+}
 
-// func (l *LoginRequestState) Exit() {}
+func (h *LoginState) Action() error {
+	h.sm.StateChangeLock.Lock()
+	defer h.sm.StateChangeLock.Unlock()
+	data, err := h.Data.Encode()
+	if err != nil {
+		return err
+	}
+	log.Printf("[state machine: Login Debug] OldData: %v", h.OldData)
+	log.Printf("[state machine: Login Debug] Player Data: %v", data)
+	return h.sm.Conn.WriteServer(utils.Concat(h.OldData, data))
+}
 
-// func (l *LoginRequestState) Validate() error {
-// 	return nil
-// }
-
-// func (l *LoginRequestState) Update(sm *StateMachine, data pac.Packet[pac.IPacketData]) error {
-// 	sm.setState(&LoginResponseState{}, data)
-// 	return nil
-// }
-
-// type LoginResponseState struct {
-// 	data pac.Packet[*pac.Raw]
-// }
-
-// func (l *LoginResponseState) ImplState() {}
-
-// func (l *LoginResponseState) Enter(data pac.Packet[pac.IPacketData]) error {
-// 	res, err := pac.CastPacket[*pac.Raw](data)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	l.data = res
-// 	return nil
-// }
-
-// func (l *LoginResponseState) Exit() {}
-
-// func (l *LoginResponseState) Validate() error {
-// 	return nil
-// }
-
-// func (l *LoginResponseState) Update(sm *StateMachine, data pac.Packet[pac.IPacketData]) error {
-// 	return errors.New("Not implemented")
-// }
+func (h *LoginState) Exit() IState {
+	log.Printf("[state machine: Login] Change to pass through state")
+	return &PassthroughState{}
+	// return &RejectState{Message: "Unexpected condition"}
+}

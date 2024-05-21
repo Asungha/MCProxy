@@ -21,5 +21,8 @@ func (r *RejectState) Exit() IState {
 
 func (r *RejectState) Action() error {
 	log.Printf("[Reject State] State Rejected : %s", r.Message)
-	return r.sm.Conn.CloseConn()
+	if r.sm != nil {
+		return r.sm.Conn.CloseConn()
+	}
+	return nil
 }

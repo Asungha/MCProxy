@@ -13,9 +13,11 @@ RUN go install mvdan.cc/garble@latest
 COPY src /app/src
 
 WORKDIR /app/src
-RUN garble -tiny -literals build -o api-server
+RUN garble -tiny -literals -seed=random build -o api-server
 # RUN go build -o api-server
-    
+
+
+
 # ----- production stage -----
 FROM alpine:latest AS production-stage
 
@@ -34,5 +36,5 @@ COPY --chown=golang:golang ./host.json /mc_reverse_proxy/host.json
 
 RUN chmod +x /mc_reverse_proxy/api-server
 
-EXPOSE 6100
+EXPOSE 25565
 CMD ["/mc_reverse_proxy/api-server"]

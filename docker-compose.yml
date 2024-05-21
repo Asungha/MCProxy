@@ -12,4 +12,4 @@ services:
 
 networks:
     mc-network:
-        driver: host
+        driver: bridge

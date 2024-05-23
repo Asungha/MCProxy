@@ -47,6 +47,7 @@ type Log struct {
 	NetworkMetric
 	ErrorMetric
 	ProxyMetric
+	PlayerMetric
 }
 
 func NewLog(ip string, action Action, state string, host *string, playername *string, message *string) Log {

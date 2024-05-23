@@ -6,8 +6,18 @@ import (
 )
 
 type TransistionFunction func(IState) (IState, error)
+
+func NewTransistionFunction(fx TransistionFunction) *TransistionFunction {
+	return &fx
+}
+
 type Function func(IState) error
 type ActionFunction func(IState) error
+type ConditionFunction func() bool
+
+func True() bool {
+	return true
+}
 
 // type StateID string
 
@@ -22,12 +32,12 @@ func CastMetadata[T any](data interface{}) *T {
 }
 
 type IState interface {
-	Init(*Function) IState
+	Init(Function) IState
 
 	Enter() error
 	Transition() (IState, error)
 
-	AddTransistionFunction(*TransistionFunction)
+	AddTransistionFunction(TransistionFunction)
 
 	SetMetadata(string, any)
 	GetMetadata(string) any
@@ -36,107 +46,90 @@ type IState interface {
 	GetTimeout() time.Duration
 	UseTimeout() bool
 
-	Halt() error
 	Destruct() error
-	GetTFunc() []*TransistionFunction
+	GetTFunc() []TransistionFunction
 }
 
-type AState struct {
-	TransistionFunctions        []*TransistionFunction
-	defaultTransistionFunctions *TransistionFunction
-	enter                       *Function
-	haltChan                    chan bool
-	timeout                     time.Duration
-	useTimeout                  bool
+type State struct {
+	TransistionFunctions []TransistionFunction
+	enter                Function
+	timeout              time.Duration
+	useTimeout           bool
 
 	IState
 }
 
-func (s *AState) GetTFunc() []*TransistionFunction {
+func NewState(fx Function) *State {
+	s := &State{}
+	s.Init(fx)
+	return s
+}
+
+func (s *State) GetTFunc() []TransistionFunction {
 	return s.TransistionFunctions
 }
 
-func (s *AState) Init(fx *Function) IState {
-	s.TransistionFunctions = []*TransistionFunction{}
-	s.haltChan = make(chan bool)
+func (s *State) Init(fx Function) IState {
+	s.TransistionFunctions = []TransistionFunction{}
 	s.enter = fx
 	return s
 }
 
-func (s *AState) Destruct() error {
-	err := s.Halt()
-	if err != nil {
-		return nil
-	}
-	close(s.haltChan)
+func (s *State) Destruct() error {
 	s.TransistionFunctions = nil
 	return nil
 }
 
-func (s *AState) Halt() error {
-	select {
-	case <-time.After(5 * time.Second):
-		return errors.New("halt timeout")
-	case s.haltChan <- true:
-		return nil
-	}
-}
-
-func (s *AState) AddTransistionFunction(fx *TransistionFunction) {
+func (s *State) AddTransistionFunction(fx TransistionFunction) {
 	s.TransistionFunctions = append(s.TransistionFunctions, fx)
 }
 
-func (s *AState) SetFunction(fx *Function) {
+func (s *State) SetFunction(fx Function) {
 	s.enter = fx
 }
 
-func (s *AState) SetTimeout(d time.Duration) {
+func (s *State) SetTimeout(d time.Duration) {
 	s.useTimeout = true
 	s.timeout = d
 }
 
-func (s *AState) GetTimeout() time.Duration {
+func (s *State) GetTimeout() time.Duration {
 	return s.timeout
 }
 
-func (s *AState) UseTimeout() bool {
+func (s *State) UseTimeout() bool {
 	return s.useTimeout
 }
 
-func (s *AState) Enter() error {
-	errs := make(chan error)
-	go func() {
-		errs <- (*s.enter)(s)
-	}()
-	select {
-	case halt := <-s.haltChan:
-		if halt {
-			return errors.New("state halted")
-		}
-	case err := <-errs:
-		return err
-	}
-	return nil
+func (s *State) Enter() error {
+	// errs := make(chan error)
+	// go func() {
+	// 	defer log.Println("[state worker] Thread exit")
+	// 	errs <- s.enter(s)
+	// }()
+	// select {
+	// case halt := <-s.haltChan:
+	// 	if halt {
+	// 		return errors.New("state halted")
+	// 	}
+	// case err := <-errs:
+	// 	return err
+	// }
+	// return nil
+	return s.enter(s)
 }
 
-func (s *AState) Transition() (IState, error) {
+func (s *State) Transition() (IState, error) {
 	for _, fx := range s.TransistionFunctions {
 		if fx == nil {
 			return nil, errors.New("no transistion function found")
 		}
-		res, err := (*fx)(s)
+		res, err := fx(s)
 		if err != nil {
 			return nil, err
 		} else if res != nil {
 			return res, nil
 		}
-	}
-	if s.defaultTransistionFunctions != nil {
-		res, err := (*s.defaultTransistionFunctions)(s)
-		if err != nil {
-			return nil, err
-		}
-		return res, nil
 	}
 	return nil, nil
 }

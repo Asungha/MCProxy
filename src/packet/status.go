@@ -38,10 +38,10 @@ type StatusData struct {
 	Players struct {
 		Max    int `json:"max"`
 		Online int `json:"online"`
-		Sample []struct {
-			Name string `json:"name"`
-			ID   string `json:"id"`
-		} `json:"sample"`
+		// Sample []struct {
+		// 	Name string `json:"name"`
+		// 	ID   string `json:"id"`
+		// } `json:"sample"`
 	} `json:"players"`
 	Description struct {
 		Extra []StatusDesExtra `json:"extra"`

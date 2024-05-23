@@ -2,7 +2,6 @@ package packet
 
 import (
 	"fmt"
-	"log"
 
 	// hex "mc_reverse_proxy/src/utils"
 	"encoding/binary"
@@ -166,7 +165,7 @@ func (h *Handshake) Decode(data []byte, size int) error {
 	if s_length+v_length > n-4 {
 		return fmt.Errorf("invalid Hostname Length: %d", s_length)
 	}
-	log.Printf("ProtocolVersion: %d", h.ProtocolVersion)
+	// log.Printf("ProtocolVersion: %d", h.ProtocolVersion)
 	h.Hostname = string(data[s_length+v_length : s_length+v_length+int(h_length)])
 	// log.Printf("Hostname: %s", h.Hostname)
 	// log.Printf("Port hex: %x", data[s_length+v_length+int(h_length):s_length+v_length+int(h_length)+2])

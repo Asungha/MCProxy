@@ -6,7 +6,7 @@ import (
 )
 
 type RejectState struct {
-	state.AState
+	state.State
 }
 
 // func (r *RejectState) ImplState() {}

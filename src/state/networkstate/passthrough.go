@@ -5,7 +5,7 @@ import (
 )
 
 type PassthroughState struct {
-	state.AState
+	state.State
 }
 
 // func (p *PassthroughState) ImplState() {}

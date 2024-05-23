@@ -20,6 +20,20 @@ func main() {
 	// 		}
 	// 	}
 	// }()
+	// f, err := os.Create("goroutine.prof")
+	// if err != nil {
+	// 	log.Fatal("could not create goroutine profile: ", err)
+	// }
+	// defer f.Close()
+	// go func() {
+	// 	<-time.After(1 * time.Minute)
+	// 	log.Printf("[Profiler] writting")
+	// 	if gprof := pprof.Lookup("goroutine"); gprof != nil {
+	// 		if err := gprof.WriteTo(f, 0); err != nil {
+	// 			log.Fatal("could not write goroutine profile: ", err)
+	// 		}
+	// 	}
+	// }()
 	if err != nil {
 		panic(err.Error())
 	} else {

@@ -81,7 +81,7 @@ func GetServerList() map[string]map[string]string {
 		}
 		serverlist = backends
 	}
-	log.Printf("server list %v", serverlist)
+
 	return serverlist
 }
 
@@ -101,12 +101,13 @@ func (p *Proxy) Serve() {
 
 	if p.metricExporter != nil && !p.init {
 		go func(p *Proxy) {
+			defer log.Println("[metricExporter] Thread exit")
 			p.metricExporter.Serve()
 		}(p)
 		p.init = true
 	}
 
-	statemachine := statemachine.NewNetworkStatemachine(p.Listener, GetServerList())
+	statemachine := statemachine.NewNetworkStatemachine(p.Listener, GetServerList(), &p.ProxyMetric)
 	// go statemachine.Run()
 	<-statemachine.ClientConnected
 
@@ -119,7 +120,12 @@ func (p *Proxy) Serve() {
 	// }
 
 	log.Printf("[Proxy] Connection between proxy and client established")
-	p.MetricCollector.Register(statemachine)
+	uuid := p.MetricCollector.Register(statemachine)
+	go func(uuid string) {
+		<-statemachine.Ctx.Done()
+		log.Printf("[sm manager] cleanup")
+		p.MetricCollector.Unregister(uuid)
+	}(uuid)
 	// // p.threadWaitGroup.Add(1)
 	// go func(_sm state.IStateMachine, startTime time.Time) {
 	// 	// defer p.threadWaitGroup.Done()
@@ -165,7 +171,6 @@ func NewProxy(port string) (Iproxy, error) {
 		} else {
 			proxy.UseMetricExporter(uint(port))
 		}
-
 	}
 	return proxy, nil
 }

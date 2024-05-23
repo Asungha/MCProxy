@@ -98,5 +98,5 @@ import (
 // }
 
 type HandshakeState struct {
-	state.AState
+	state.State
 }

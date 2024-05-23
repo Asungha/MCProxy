@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,31 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
+type PrometheusFormatter struct {
+	data string
+}
+
+func (f *PrometheusFormatter) Add(metricName string, value string, filter map[string]string) *PrometheusFormatter {
+	if len(filter) == 0 {
+		f.data += fmt.Sprintf("\n%s %s", metricName, value)
+	} else {
+		buf := "{"
+		for k, v := range filter {
+			if buf != "{" {
+				buf += ","
+			}
+			buf += fmt.Sprintf(`%s="%s"`, k, v)
+		}
+		buf += "}"
+		f.data += fmt.Sprintf("\n%s%s %s", metricName, buf, value)
+	}
+	return f
+}
+
+func (f *PrometheusFormatter) Get() string {
+	return f.data
+}
+
 var ProcessorCount *uint
 
 type Loggable interface {
@@ -23,7 +49,10 @@ type Loggable interface {
 	Log() Log
 }
 
+var starttime *time.Time
+
 type SystemMetric struct {
+	StartTime      time.Time
 	ProcessorCount uint
 	ThreadCount    uint
 	CPUPercentage  float64
@@ -33,15 +62,20 @@ type SystemMetric struct {
 }
 
 func (m *SystemMetric) GetSystemMetric() string {
-	return fmt.Sprintf(`
-	mcproxy_sys_processor_count %d
-	mcproxy_sys_threads_count %d
-	mcproxy_sys_cpu_percentage %.2f
-	mcproxy_sys_cpu_time %.2f
-	mcproxy_sys_memory_heap_used %d
-	mcproxy_sys_memory_heap_free %d
-
-	`, m.ProcessorCount, m.ThreadCount, m.CPUPercentage, m.CPUTime, m.HeapMemoryUsed, m.HeapMemoryFree)
+	if starttime == nil {
+		t := time.Now()
+		starttime = &t
+	}
+	filter := map[string]string{}
+	formatter := PrometheusFormatter{}
+	formatter.Add("mcproxy_sys_uptime", strconv.FormatInt(int64(time.Since(*starttime).Seconds()), 10), filter)
+	formatter.Add("mcproxy_sys_processor_count", strconv.FormatInt(int64(m.ProcessorCount), 10), filter)
+	formatter.Add("mcproxy_sys_threads_count", strconv.FormatInt(int64(m.ThreadCount), 10), filter)
+	formatter.Add("mcproxy_sys_cpu_percentage", fmt.Sprint(m.CPUPercentage), filter)
+	formatter.Add("mcproxy_sys_cpu_time", fmt.Sprint(m.CPUTime, 32), filter)
+	formatter.Add("mcproxy_sys_memory_heap_used", strconv.FormatInt(int64(m.HeapMemoryUsed), 10), filter)
+	formatter.Add("mcproxy_sys_memory_heap_free", strconv.FormatInt(int64(m.HeapMemoryFree), 10), filter)
+	return formatter.Get()
 }
 
 type NetworkMetric struct {
@@ -68,17 +102,17 @@ func (m *NetworkMetric) Sum(a NetworkMetric) {
 }
 
 func (m *NetworkMetric) GetNetworkMetric() string {
-	return fmt.Sprintf(`
-	mcproxy_network_client_packet_tx %d
-	mcproxy_network_client_packet_rx %d
-	mcproxy_network_server_packet_tx %d
-	mcproxy_network_server_packet_rx %d
-	mcproxy_network_client_data_tx %d
-	mcproxy_network_client_data_rx %d
-	mcproxy_network_server_data_tx %d
-	mcproxy_network_server_data_rx %d
-
-	`, m.ClientPacketTx, m.ClientPacketRx, m.ServerPacketTx, m.ServerPacketRx, m.ClientDataTx, m.ClientDataRx, m.ServerDataTx, m.ServerDataRx)
+	filter := map[string]string{}
+	formatter := PrometheusFormatter{}
+	formatter.Add("mcproxy_network_client_packet_tx", strconv.FormatInt(int64(m.ClientPacketTx), 10), filter)
+	formatter.Add("mcproxy_network_client_packet_rx", strconv.FormatInt(int64(m.ClientPacketRx), 10), filter)
+	formatter.Add("mcproxy_network_server_packet_tx", strconv.FormatInt(int64(m.ServerPacketTx), 10), filter)
+	formatter.Add("mcproxy_network_server_packet_rx", strconv.FormatInt(int64(m.ServerPacketRx), 10), filter)
+	formatter.Add("mcproxy_network_client_data_tx", strconv.FormatInt(int64(m.ClientDataTx), 10), filter)
+	formatter.Add("mcproxy_network_client_data_rx", strconv.FormatInt(int64(m.ClientPacketRx), 10), filter)
+	formatter.Add("mcproxy_network_server_data_tx", strconv.FormatInt(int64(m.ServerDataTx), 10), filter)
+	formatter.Add("mcproxy_network_server_data_rx", strconv.FormatInt(int64(m.ServerDataRx), 10), filter)
+	return formatter.Get()
 }
 
 type ProxyMetric struct {
@@ -88,12 +122,12 @@ type ProxyMetric struct {
 }
 
 func (m *ProxyMetric) GetProxyMetric() string {
-	return fmt.Sprintf(`
-	mcproxy_proxy_get_status %d
-	mcproxy_proxy_login %d
-	mcproxy_proxy_playing %d
-
-	`, m.PlayerGetStatus, m.PlayerLogin, m.PlayerPlaying)
+	filter := map[string]string{}
+	formatter := PrometheusFormatter{}
+	formatter.Add("mcproxy_proxy_get_status", strconv.FormatInt(int64(m.PlayerGetStatus), 10), filter)
+	formatter.Add("mcproxy_proxy_login", strconv.FormatInt(int64(m.PlayerLogin), 10), filter)
+	formatter.Add("mcproxy_proxy_playing", strconv.FormatInt(int64(m.PlayerPlaying), 10), filter)
+	return formatter.Get()
 }
 
 type ErrorMetric struct {
@@ -113,14 +147,14 @@ func (m *ErrorMetric) Sum(a ErrorMetric) {
 }
 
 func (m *ErrorMetric) GetErrorMetric() string {
-	return fmt.Sprintf(`
-	mcproxy_error_accept_failed %d
-	mcproxy_error_hanhshake_failed %d
-	mcproxy_error_deserialization_failed %d
-	mcproxy_error_hostname_resolve_failed %d
-	mcproxy_error_server_connect_failed %d
-
-	`, m.AcceptFailed, m.HandshakeFailed, m.PacketDeserializeFailed, m.HostnameResolveFailed, m.ServerConnectFailed)
+	filter := map[string]string{}
+	formatter := PrometheusFormatter{}
+	formatter.Add("mcproxy_error_accept_failed", strconv.FormatInt(int64(m.AcceptFailed), 10), filter)
+	formatter.Add("mcproxy_error_hanhshake_failed", strconv.FormatInt(int64(m.HandshakeFailed), 10), filter)
+	formatter.Add("mcproxy_error_deserialization_failed", strconv.FormatInt(int64(m.PacketDeserializeFailed), 10), filter)
+	formatter.Add("mcproxy_error_hostname_resolve_failed", strconv.FormatInt(int64(m.HostnameResolveFailed), 10), filter)
+	formatter.Add("mcproxy_error_server_connect_failed", strconv.FormatInt(int64(m.ServerConnectFailed), 10), filter)
+	return formatter.Get()
 }
 
 type Metric struct {
@@ -128,13 +162,69 @@ type Metric struct {
 	NetworkMetric
 	ErrorMetric
 	ProxyMetric
+	playerMetric map[string]PlayerMetric
+}
+
+type PlayerMetric struct {
+	LoggedOut  bool
+	PlayerName string
+	IP         string
+	Port       string
+	LogginTime time.Time
+	Playtime   time.Duration
+	*NetworkMetric
+	ErrorMetric
+}
+
+func NewPlayerMetric(addr string, name string) *PlayerMetric {
+	s := strings.Split(addr, ":")
+	return &PlayerMetric{
+		LogginTime: time.Now(),
+		PlayerName: name,
+		IP:         s[0],
+		Port:       s[1],
+	}
+}
+
+func (m *PlayerMetric) GetPlayerMetric() string {
+	if m.PlayerName == "" || m.IP == "" {
+		return ""
+	}
+	filter := map[string]string{"player": m.PlayerName, "ip": m.IP}
+	formatter := PrometheusFormatter{}
+	formatter.Add("mcproxy_player_online", "1", filter)
+	formatter.Add("mcproxy_player_playtime", fmt.Sprint(time.Since(m.LogginTime).Seconds()), filter)
+
+	formatter.Add("mcproxy_player_error_accept_failed", fmt.Sprint(m.AcceptFailed), filter)
+	formatter.Add("mcproxy_player_error_hanhshake_failed", fmt.Sprint(m.HandshakeFailed), filter)
+	formatter.Add("mcproxy_player_error_deserialization_failed", fmt.Sprint(m.PacketDeserializeFailed), filter)
+	formatter.Add("mcproxy_player_error_hostname_resolve_failed", fmt.Sprint(m.HostnameResolveFailed), filter)
+	formatter.Add("mcproxy_player_error_server_connect_failed", fmt.Sprint(m.ServerConnectFailed), filter)
+	formatter.Add("mcproxy_player_error_server_connect_failed", fmt.Sprint(m.ServerConnectFailed), filter)
+
+	if m.NetworkMetric != nil {
+		formatter.Add("mcproxy_player_network_client_packet_tx", strconv.FormatInt(int64(m.NetworkMetric.ClientPacketTx), 10), filter)
+		formatter.Add("mcproxy_player_network_client_packet_rx", strconv.FormatInt(int64(m.NetworkMetric.ClientPacketRx), 10), filter)
+		formatter.Add("mcproxy_player_network_server_packet_tx", strconv.FormatInt(int64(m.NetworkMetric.ServerPacketTx), 10), filter)
+		formatter.Add("mcproxy_player_network_server_packet_rx", strconv.FormatInt(int64(m.NetworkMetric.ServerPacketRx), 10), filter)
+		formatter.Add("mcproxy_player_network_client_data_tx", strconv.FormatInt(int64(m.NetworkMetric.ClientDataTx), 10), filter)
+		formatter.Add("mcproxy_player_network_client_data_rx", strconv.FormatInt(int64(m.NetworkMetric.ClientPacketRx), 10), filter)
+		formatter.Add("mcproxy_player_network_server_data_tx", strconv.FormatInt(int64(m.NetworkMetric.ServerDataTx), 10), filter)
+		formatter.Add("mcproxy_player_network_server_data_rx", strconv.FormatInt(int64(m.NetworkMetric.ServerDataRx), 10), filter)
+	}
+
+	return formatter.Get()
 }
 
 func (m *Metric) GetMetric() string {
+	m.ProxyMetric.PlayerPlaying = uint(len(m.playerMetric) - 1)
 	d := (m.GetNetworkMetric() + m.GetErrorMetric() + m.GetSystemMetric() + m.GetProxyMetric())
+	for _, playerMetric := range m.playerMetric {
+		d += playerMetric.GetPlayerMetric()
+	}
 	d = strings.ReplaceAll(d, "\t", "")
 	d = strings.ReplaceAll(d, "\n\n", "\n")
-	return d[1:]
+	return d
 }
 
 type MetricCollecter struct {
@@ -180,10 +270,12 @@ func (c *MetricCollecter) systemMetric() (SystemMetric, error) {
 	return SystemMetric{}, errors.New("Failed to get system metric")
 }
 
-func (c *MetricCollecter) Register(l Loggable) {
+func (c *MetricCollecter) Register(l Loggable) string {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	c.LogEntities[l.UUID()] = l
+	uuid := l.UUID()
+	c.LogEntities[uuid] = l
+	return uuid
 }
 
 func (c *MetricCollecter) Unregister(key string) {
@@ -200,7 +292,7 @@ func (c *MetricCollecter) Collect() (Metric, error) {
 	if err != nil {
 		return Metric{}, err
 	}
-	metric := Metric{SystemMetric: sys}
+	metric := Metric{SystemMetric: sys, playerMetric: make(map[string]PlayerMetric)}
 	for _, e := range c.LogEntities {
 		log := e.Log()
 		if (ProxyMetric{}) != log.ProxyMetric {
@@ -208,6 +300,7 @@ func (c *MetricCollecter) Collect() (Metric, error) {
 		}
 		metric.NetworkMetric.Sum(log.NetworkMetric)
 		metric.ErrorMetric.Sum(log.ErrorMetric)
+		metric.playerMetric[log.PlayerName+log.IP] = log.PlayerMetric
 	}
 	return metric, nil
 }

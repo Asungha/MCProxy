@@ -69,11 +69,12 @@ func (c *Connection) PreConditionCheck() error {
 }
 
 func (c *Connection) ListenClient() error {
+	defer log.Println("[client listener controller] Thread exit")
 	// defer c.WaitGroup.Done()
 	errs := make(chan error)
 	// done := make(chan bool)
 	go func(errs chan error) {
-		defer close(c.ClientData)
+		defer log.Println("[client listener] Thread exit")
 		for {
 			buf := make([]byte, 1024)
 			// (*c.ClientConn).SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -84,7 +85,7 @@ func (c *Connection) ListenClient() error {
 				c.Cancle(err)
 				buf = nil
 				errs <- err
-				break
+				return
 			}
 			if n == 0 {
 				continue
@@ -99,28 +100,31 @@ func (c *Connection) ListenClient() error {
 			// c.StateChangeLock.Unlock()
 			buf = nil
 		}
-		log.Printf("[client listener] Stop listening client")
 	}(errs)
 	for {
 		select {
 		case e := <-errs:
 			(*c.ClientConn).Close()
-			log.Printf("[ListenClient] exit due to error: %v", e)
+			log.Printf("[client listener] Exit due to error: %v", e)
 			c.Cancle(e)
+			<-c.Ctx.Done()
 			return nil
-			// case <-c.ctx.Done():
-			// 	(*c.ClientConn).Close()
-			// 	log.Printf("[client listener] Exit due context canceled")
-			// 	return nil
+		case <-c.Ctx.Done():
+			c.Cancle(nil)
+			(*c.ClientConn).Close()
+			<-errs
+			log.Printf("[client listener] Exit due context canceled")
+			return nil
 		}
 	}
 }
 
 func (c *Connection) ListenServer() error {
-	// defer close(c.ServerData)
+	defer log.Println("[server listener controller] Thread exit")
 	errs := make(chan error)
 	// datas := make(chan []byte)
 	go func(errs chan error) {
+		defer log.Println("[server listener] Thread exit")
 		for {
 			buf := make([]byte, 1024)
 			// (*c.ServerConn).SetReadDeadline(time.Now().Add(5 * time.Second))
@@ -131,7 +135,7 @@ func (c *Connection) ListenServer() error {
 				c.Cancle(err)
 				buf = nil
 				errs <- err
-				break
+				return
 			}
 			if n == 0 {
 				continue
@@ -144,19 +148,21 @@ func (c *Connection) ListenServer() error {
 			// c.StateChangeLock.Unlock()
 			buf = nil
 		}
-		log.Printf("[server listener] Stop listening server")
 	}(errs)
 	for {
 		select {
 		case e := <-errs:
 			c.Cancle(e)
 			(*c.ServerConn).Close()
-			log.Printf("[ListenServer] exit due to error: %v", e)
+			log.Printf("[server listener] Thread exit due to error: %v", e)
+			<-c.Ctx.Done()
 			return nil
-			// case <-c.ctx.Done():
-			// 	(*c.ServerConn).Close()
-			// 	log.Printf("[server listener] Exit due context canceled")
-			// 	return nil
+		case <-c.Ctx.Done():
+			c.Cancle(nil)
+			(*c.ServerConn).Close()
+			<-errs
+			log.Printf("[server listener] Exit due context canceled")
+			return nil
 		}
 	}
 }
@@ -221,5 +227,13 @@ func (c *Connection) Destroy() {
 }
 
 func NewConnection(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) *Connection {
-	return &Connection{StateChangeLock: mutex, Ctx: ctx, Cancle: cancle, Listener: listener, NetworkMetric: metric.NetworkMetric{}}
+	return &Connection{
+		StateChangeLock: mutex,
+		Ctx:             ctx,
+		Cancle:          cancle,
+		Listener:        listener,
+		NetworkMetric:   metric.NetworkMetric{},
+		ClientData:      make(chan []byte, 16),
+		ServerData:      make(chan []byte, 16),
+	}
 }

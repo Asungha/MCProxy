@@ -39,5 +39,5 @@ import (
 // }
 
 type InitState struct {
-	state.AState
+	state.State
 }

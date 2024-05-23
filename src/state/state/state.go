@@ -102,20 +102,6 @@ func (s *State) UseTimeout() bool {
 }
 
 func (s *State) Enter() error {
-	// errs := make(chan error)
-	// go func() {
-	// 	defer log.Println("[state worker] Thread exit")
-	// 	errs <- s.enter(s)
-	// }()
-	// select {
-	// case halt := <-s.haltChan:
-	// 	if halt {
-	// 		return errors.New("state halted")
-	// 	}
-	// case err := <-errs:
-	// 	return err
-	// }
-	// return nil
 	return s.enter(s)
 }
 

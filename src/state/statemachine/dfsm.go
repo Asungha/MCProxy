@@ -40,20 +40,16 @@ func (sm *AStateMachine) RegisterState(stateName State, s state.IState) error {
 		sm.States = make(map[string]state.IState)
 		sm.States[""] = nil
 	}
-	// log.Printf(string(stateName))
 	sm.States[string(stateName)] = s
-	// log.Printf("%v", sm.States)
 	return nil
 }
 
 func (sm *AStateMachine) TransistionCondition(pair TransistionPair, condition state.ConditionFunction) {
-	// c := condition
 	sm.Conditions = append(sm.Conditions, Condition{Fx: condition, TransistionPair: pair})
 }
 
 func (sm *AStateMachine) TransistionFunction(source State, fx state.TransistionFunction) {
 	(sm.States[string(source)]).AddTransistionFunction(fx)
-	// log.Printf("TFunc %s %v", source, sm.States[string(source)].GetTFunc())
 }
 
 func (sm *AStateMachine) Construct() error {
@@ -90,62 +86,18 @@ func (sm *AStateMachine) State(s State) state.IState {
 func (sm *AStateMachine) Run() error {
 	defer log.Println("[statemachine worker] Thread exit")
 	log.Println("[statemachine worker] start")
-	// defer func() {
-	// 	log.Printf("[State machine] Exit")
-	// 	// err := sm.Halt()
-	// 	// if err != nil {
-	// 	// 	panic(err)
-	// 	// }
-	// 	sm.Cancle(nil)
-	// }()
-	// c := make(chan error)
-	// defer close(c)
 	for {
-		// var ctx context.Context
-		// var cancle context.CancelFunc
-		// if sm.currectState.UseTimeout() {
-		// 	ctx, cancle = context.WithDeadline(context.Background(), time.Now().Add(sm.currectState.GetTimeout()))
-		// } else {
-		// 	ctx, cancle = context.WithCancel(context.Background())
-		// }
-		// log.Printf("run start")
-		// go func() {
-		// 	// defer log.Println("[state worker] Thread exit")
-		// 	c <- (sm.currectState).Enter()
-		// }()
-		// select {
-		// case err := <-c:
-		// 	if err != nil {
-		// 		log.Printf("run err %v", err.Error())
-		// 		// log.Println("e")
-		// 		return err
-		// 		// panic(err)
-		// 	}
-		// 	log.Printf("run ok")
-		// case <-sm.Ctx.Done():
-		// 	// log.Printf("Halted")
-		// 	log.Printf("run halt")
-		// 	return errors.New("Halted")
-		// }
 		err := (sm.currectState).Enter()
 		if err != nil {
 			log.Printf("run err %v", err.Error())
-			// log.Println("e")
 			return err
-			// panic(err)
 		}
-		// err := (sm.currectState).Enter()
 
 		nextState, err := (sm.currectState).Transition()
 		if err != nil {
-			// log.Printf("%v %v", nextState, err)
-			// log.Println("t")
-			// log.Println(err)
 			return err
-			// panic(err)
 		}
 		if nextState == nil {
-			// log.Println("done")
 			return nil
 		}
 		sm.currectState = nextState

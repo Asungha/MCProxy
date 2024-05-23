@@ -25,7 +25,7 @@ type NetworkStateMachine struct {
 	Conn         *service.Connection
 	hostname     string
 	// playername      string
-	Data            *pac.Packet[*pac.Handshake]
+	Data            *pac.Handshake
 	StateChangeLock sync.Mutex
 	ClientConnected chan bool
 	AStateMachine
@@ -68,7 +68,8 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	ClientConnected := sm.ClientConnected
 	LoggedIn := false
 	isLoggedIn := &LoggedIn
-	loginpayload := []byte{}
+	// loginpayload := &pac.Login{}
+	var loginpayload *pac.Login
 	// playername := &sm.playername
 
 	// handler
@@ -96,27 +97,30 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		select {
 		case rawData := <-sm.Conn.ClientData:
 			hs := pac.Handshake{}
-			data := pac.Packet[*pac.Handshake]{Data: &hs}
-			err := data.Decode(&rawData, len(rawData))
+			// data := pac.Handshake{Data: &hs}
+			// err := data.Decode(&rawData, len(rawData))
+			err := hs.Decode(rawData)
 			if err != nil {
 				return err
 			}
-			*hostname = data.Data.Hostname
-			Data = &data
+			*hostname = hs.Hostname
+			Data = &hs
 		case <-sm.Conn.Ctx.Done():
 			return errors.New("Context Done")
 		}
-		// if Data.Data.NextState == 0x01 {
-		// 	log.Printf("[Handshake state] skip status packet. data: %v, Tail: %x", Data, Data.Data.Tail)
-		// 	return nil
-		// }
-		log.Printf("tail: %x", Data.Data.Tail)
-		if len(Data.Data.Tail) > 2 {
-			// might be a login
-			loginpayload = Data.Data.Tail
+		log.Printf("tail: %x", Data.Tail)
+		if len(Data.Tail) > 2 {
+			// // might be a login
+			// loginpayload = Data.Tail
+			l := pac.Login{}
+			err := l.Decode(Data.Tail)
+			if err != nil {
+				return err
+			}
+			loginpayload = &l
 		}
 		if data, ok := sm.Conn.ServerList[*hostname]; ok {
-			log.Printf("%v", Data.Data)
+			log.Printf("%v", Data)
 			if target, ok := data["target"]; ok {
 				err := sm.Conn.ConnectServer(target)
 				if err != nil {
@@ -141,8 +145,8 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 					log.Printf("[handshake state] Handshake packet send failed %v", err)
 					return err
 				}
-				if Data.Data.Tail != nil {
-					err = sm.Conn.WriteServer(Data.Data.Tail)
+				if Data.Tail != nil {
+					err = sm.Conn.WriteServer(Data.Tail)
 					if err != nil {
 						log.Printf("[handshake state] additional packet send failed %v", err)
 						return err
@@ -179,8 +183,9 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		p.Modinfo.ModList = []string{}
 		p.Modinfo.Type = "FML"
 
-		packet := pac.Packet[*pac.Status]{Data: &pac.Status{}}
-		packet.Data.Json = p.JSONString()
+		// packet := pac.Packet[*pac.Status]{Data: &pac.Status{}}
+		packet := pac.Status{Json: p.JSONString()}
+		// packet.Data.Json = p.JSONString()
 		// buf := make([]byte, 1024)
 		res, err := packet.Encode()
 		if err != nil {
@@ -272,23 +277,28 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	handshakeState := state.NewState(handshakeHandler)
 	statusReqState := state.NewState(statusReqHandler)
 	loginState := state.NewState(func(i state.IState) error {
-		if len(loginpayload) != 0 {
+		if loginpayload != nil {
+			res, err := loginpayload.Encode()
+			if err != nil {
+				return err
+			}
+			packet := pac.Packet{PacketHeader: loginpayload.PacketHeader, Payload: res}
 			go func() {
-				sm.Conn.ClientData <- loginpayload
+				sm.Conn.ClientData <- pac.Serialize(packet)
 			}()
 		}
 		select {
 		case cData := <-sm.Conn.ClientData:
 			// log.Printf("[Loging state] Data: %x", cData)
-			p := pac.Packet[*pac.PlayerData]{Data: &pac.PlayerData{}}
-			err := p.Decode(&cData, len(cData))
+			p := pac.Login{}
+			err := p.Decode(cData)
 			if err != nil {
 				log.Println(err)
 				return err
 			}
 			log.Printf("[Loging state] Decoded Data: %v", p)
-			log.Printf("[Loging state] Player %s logged in", p.Data.Name)
-			sm.playerMetric.PlayerName = p.Data.Name
+			log.Printf("[Loging state] Player %s logged in", p.Name)
+			sm.playerMetric.PlayerName = p.Name
 			sm.playerMetric.LogginTime = time.Now()
 			sm.proxyMetric.PlayerLogin++
 			sm.proxyMetric.PlayerPlaying++
@@ -326,11 +336,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	sm.TransistionCondition(TransistionPair{Source: "init", Destination: "handshake"}, state.True)
 
 	sm.TransistionFunction("handshake", func(i state.IState) (state.IState, error) {
-		log.Println(Data.ID)
-		// if Data.ID == 1 {
-		// 	return pingState, nil
-		// }
-		if Data.Data.NextState == 0x01 && Data.ID == 0 {
+		if Data.NextState == 0x01 && Data.ID == 0 {
 			// go collector.Collect()
 			return passthroughState, nil
 		}

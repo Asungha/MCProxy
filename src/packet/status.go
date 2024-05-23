@@ -63,6 +63,7 @@ func (s *StatusData) JSONString() string {
 
 type Status struct {
 	Json string
+	Packet
 }
 
 func (h *Status) ImplPacketData() {}

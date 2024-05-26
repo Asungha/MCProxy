@@ -2,6 +2,7 @@ package statemachine
 
 import (
 	"context"
+	"errors"
 	"log"
 	state "mc_reverse_proxy/src/state/state"
 )
@@ -32,6 +33,7 @@ type AStateMachine struct {
 	Conditions   []Condition
 	Ctx          context.Context
 	Cancle       context.CancelCauseFunc
+	DeferFunc    state.DeferFunction
 	IStateMachine
 }
 
@@ -67,8 +69,15 @@ func (sm *AStateMachine) Construct() error {
 }
 
 func (sm *AStateMachine) Destruct() error {
+	sm.Cancle(errors.New("Desturct Called"))
 	for _, state := range sm.States {
+		if state == nil {
+			continue
+		}
 		(state).Destruct()
+	}
+	if sm.DeferFunc != nil {
+		sm.DeferFunc()
 	}
 	sm.Conditions = nil
 	sm.States = nil
@@ -84,8 +93,9 @@ func (sm *AStateMachine) State(s State) state.IState {
 }
 
 func (sm *AStateMachine) Run() error {
-	defer log.Println("[statemachine worker] Thread exit")
-	log.Println("[statemachine worker] start")
+	// defer log.Println("[statemachine worker] Thread exit")
+	// log.Println("[statemachine worker] start")
+	defer sm.Destruct()
 	for {
 		err := (sm.currectState).Enter()
 		if err != nil {

@@ -14,6 +14,7 @@ func NewTransistionFunction(fx TransistionFunction) *TransistionFunction {
 type Function func(IState) error
 type ActionFunction func(IState) error
 type ConditionFunction func() bool
+type DeferFunction func()
 
 func True() bool {
 	return true

@@ -9,6 +9,7 @@ import (
 	pac "mc_reverse_proxy/src/packet"
 	service "mc_reverse_proxy/src/service"
 	state "mc_reverse_proxy/src/state/state"
+	"mc_reverse_proxy/src/utils"
 	"net"
 	"strings"
 	"sync"
@@ -68,10 +69,14 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	ClientConnected := sm.ClientConnected
 	LoggedIn := false
 	isLoggedIn := &LoggedIn
+	isHttp := false
 	// loginpayload := &pac.Login{}
 	var loginpayload *pac.Login
 	// playername := &sm.playername
 
+	sm.DeferFunc = func() {
+		sm.Conn.CloseConn()
+	}
 	// handler
 	var initHandler state.Function = func(i state.IState) error {
 		log.Println("[Init state] wait for client")
@@ -99,6 +104,10 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			hs := pac.Handshake{}
 			// data := pac.Handshake{Data: &hs}
 			// err := data.Decode(&rawData, len(rawData))
+			if utils.IsHTTPMethod(strings.Split(string(rawData), " ")[0]) {
+				isHttp = true
+				return nil
+			}
 			err := hs.Decode(rawData)
 			if err != nil {
 				return err
@@ -110,8 +119,6 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		}
 		log.Printf("tail: %x", Data.Tail)
 		if len(Data.Tail) > 2 {
-			// // might be a login
-			// loginpayload = Data.Tail
 			l := pac.Login{}
 			err := l.Decode(Data.Tail)
 			if err != nil {
@@ -272,6 +279,16 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		return nil
 	}
 
+	var httpHandler state.Function = func(i state.IState) error {
+		log.Printf("[http state] Enter")
+		rawResponse := "HTTP/1.1 301 Moved Permanently\r\n" +
+			"Location: https://www.youtube.com/watch?v=dQw4w9WgXcQ\r\n" +
+			"Content-Type: text/html; charset=UTF-8\r\n" +
+			"Content-Length: 0\r\n" +
+			"\r\n"
+		return sm.Conn.WriteClient([]byte(rawResponse))
+	}
+
 	// state
 	initState := state.NewState(initHandler)
 	handshakeState := state.NewState(handshakeHandler)
@@ -290,6 +307,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		select {
 		case cData := <-sm.Conn.ClientData:
 			// log.Printf("[Loging state] Data: %x", cData)
+			StateChangeLock.Lock()
 			p := pac.Login{}
 			err := p.Decode(cData)
 			if err != nil {
@@ -302,7 +320,6 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			sm.playerMetric.LogginTime = time.Now()
 			sm.proxyMetric.PlayerLogin++
 			sm.proxyMetric.PlayerPlaying++
-			StateChangeLock.Lock()
 			sm.Conn.WriteServer(cData)
 			StateChangeLock.Unlock()
 			return nil
@@ -315,6 +332,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	passthroughState := state.NewState(passthroughHandler)
 	rejectState := state.NewState(rejectHandler)
 	pingState := state.NewState(pingHandler)
+	httpState := state.NewState(httpHandler)
 
 	// var HaltTransistion state.ConditionFunction = func() bool {
 	// 	log.Println(sm.Conn.Ctx.Err())
@@ -336,6 +354,9 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	sm.TransistionCondition(TransistionPair{Source: "init", Destination: "handshake"}, state.True)
 
 	sm.TransistionFunction("handshake", func(i state.IState) (state.IState, error) {
+		if isHttp {
+			return httpState, nil
+		}
 		if Data.NextState == 0x01 && Data.ID == 0 {
 			// go collector.Collect()
 			return passthroughState, nil

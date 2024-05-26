@@ -111,14 +111,6 @@ func (p *Proxy) Serve() {
 	// go statemachine.Run()
 	<-statemachine.ClientConnected
 
-	// statemachine := statemachine.NewNetworkStatemachine(p.Listener, GetServerList(), &p.ErrorMetric, &p.ProxyMetric)
-	// err := statemachine.Run() // Block until someone connected
-	// if err != nil {
-	// 	log.Printf("[Proxy] Connection accept failed: %v", err)
-	// 	// p.StateMachine.Destroy()
-	// 	return
-	// }
-
 	log.Printf("[Proxy] Connection between proxy and client established")
 	uuid := p.MetricCollector.Register(statemachine)
 	go func(uuid string) {
@@ -126,20 +118,6 @@ func (p *Proxy) Serve() {
 		log.Printf("[sm manager] cleanup")
 		p.MetricCollector.Unregister(uuid)
 	}(uuid)
-	// // p.threadWaitGroup.Add(1)
-	// go func(_sm state.IStateMachine, startTime time.Time) {
-	// 	// defer p.threadWaitGroup.Done()
-	// 	for {
-	// 		switch _sm.Transition() {
-	// 		case state.STATUS_OK:
-	// 			continue
-	// 		default:
-	// 			log.Printf("[Proxy] Connection Terminated after %v", time.Since(startTime))
-	// 			_sm.Destroy()
-	// 			return
-	// 		}
-	// 	}
-	// }(statemachine, time.Now())
 }
 
 func NewProxy(port string) (Iproxy, error) {

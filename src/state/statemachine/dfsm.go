@@ -96,6 +96,7 @@ func (sm *AStateMachine) Run() error {
 	// defer log.Println("[statemachine worker] Thread exit")
 	// log.Println("[statemachine worker] start")
 	defer sm.Destruct()
+	defer sm.DeferFunc()
 	for {
 		err := (sm.currectState).Enter()
 		if err != nil {

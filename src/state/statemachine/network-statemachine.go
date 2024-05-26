@@ -22,15 +22,16 @@ import (
 type NetworkStateMachine struct {
 	// errorMetric     metric.ErrorMetric
 	playerMetric metric.PlayerMetric
-	proxyMetric  metric.ProxyMetric
-	Conn         *service.Connection
-	hostname     string
+	// proxyMetric  metric.ProxyMetric
+	logPusher metric.LogPusher
+	Conn      *service.Connection
+	hostname  string
 	// playername      string
 	Data            *pac.Handshake
 	StateChangeLock sync.Mutex
 	ClientConnected chan bool
 	AStateMachine
-	metric.Loggable
+	// metric.Loggable
 }
 
 func (sm *NetworkStateMachine) Run() error {
@@ -41,27 +42,29 @@ func (sm *NetworkStateMachine) UUID() string {
 	return uuid.NewString()
 }
 
-func (sm *NetworkStateMachine) Log() metric.Log {
-	return metric.Log{ErrorMetric: sm.playerMetric.ErrorMetric, NetworkMetric: sm.Conn.NetworkMetric, PlayerMetric: sm.playerMetric, ProxyMetric: sm.proxyMetric}
-}
+// func (sm *NetworkStateMachine) Log() metric.Log {
+// 	return metric.Log{ErrorMetric: sm.playerMetric.ErrorMetric, NetworkMetric: sm.Conn.NetworkMetric, PlayerMetric: sm.playerMetric, ProxyMetric: sm.proxyMetric}
+// }
 
 func (sm *NetworkStateMachine) Serve() error {
 	return sm.Run()
 }
 
-func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[string]string, serverMetric *metric.ProxyMetric) *NetworkStateMachine {
+func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[string]string, serverMetric *metric.ProxyMetric, metricCollector *metric.MetricCollecter) *NetworkStateMachine {
 	ctx, cancle := context.WithCancelCause(context.Background())
 	sm := &NetworkStateMachine{
 		StateChangeLock: sync.Mutex{},
 		playerMetric:    metric.PlayerMetric{ErrorMetric: metric.ErrorMetric{}},
-		proxyMetric:     metric.ProxyMetric{},
-		ClientConnected: make(chan bool),
+		// proxyMetric:     metric.ProxyMetric{},
+		ClientConnected: make(chan bool, 1),
 	}
 	sm.Conn = service.NewConnection(&sm.StateChangeLock, ctx, cancle, listener)
 	sm.Conn.ServerList = serverlist
-	sm.playerMetric.NetworkMetric = &sm.Conn.NetworkMetric
+	// sm.playerMetric.NetworkMetric = &sm.Conn.NetworkMetric
 	sm.Ctx = ctx
 	sm.Cancle = cancle
+
+	logPusher := &metric.LogPusher{Collector: *metricCollector}
 	hostname := &sm.hostname
 	Data := sm.Data
 	playerMetric := &sm.playerMetric
@@ -76,16 +79,20 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 
 	sm.DeferFunc = func() {
 		sm.Conn.CloseConn()
+		logPusher.PushNetworkMetric(sm.Conn.NetworkMetric)
 	}
 	// handler
 	var initHandler state.Function = func(i state.IState) error {
-		log.Println("[Init state] wait for client")
+		// log.Println("[Init state] wait for client")
 		err := sm.Conn.WaitClientConnection()
 		if err != nil {
 			log.Printf(err.Error())
+			playerMetric.AcceptFailed += 1
+			logPusher.PushErrorMetric(metric.ErrorMetric{AcceptFailed: 1})
 			return err
 		}
-		log.Println("[Init state] got client")
+		logPusher.PushProxyMetric(metric.ProxyMetric{Connected: 1})
+		// log.Println("[Init state] got client")
 		s := strings.Split(sm.Conn.ClientAddress, ":")
 		sm.playerMetric.IP = s[0]
 		sm.playerMetric.Port = s[1]
@@ -106,10 +113,14 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			// err := data.Decode(&rawData, len(rawData))
 			if utils.IsHTTPMethod(strings.Split(string(rawData), " ")[0]) {
 				isHttp = true
+				playerMetric.PacketDeserializeFailed += 1
+				logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
 				return nil
 			}
 			err := hs.Decode(rawData)
 			if err != nil {
+				playerMetric.PacketDeserializeFailed += 1
+				logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
 				return err
 			}
 			*hostname = hs.Hostname
@@ -117,11 +128,13 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		case <-sm.Conn.Ctx.Done():
 			return errors.New("Context Done")
 		}
-		log.Printf("tail: %x", Data.Tail)
+		// log.Printf("tail: %x", Data.Tail)
 		if len(Data.Tail) > 2 {
 			l := pac.Login{}
 			err := l.Decode(Data.Tail)
 			if err != nil {
+				playerMetric.PacketDeserializeFailed += 1
+				logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
 				return err
 			}
 			loginpayload = &l
@@ -132,17 +145,21 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 				err := sm.Conn.ConnectServer(target)
 				if err != nil {
 					playerMetric.ServerConnectFailed += 1
+					logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
 					return err
 				}
 				err = sm.Conn.PreConditionCheck()
 				if err != nil {
 					log.Printf("[handshake state] Precondition failed %v", err)
+					playerMetric.ServerConnectFailed += 1
+					logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
 					return err
 				}
 				go sm.Conn.ListenServer()
 				hs_packet, err := Data.Encode()
 				if err != nil {
 					playerMetric.PacketDeserializeFailed += 1
+					logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
 					log.Printf("[handshake state] Encode handshale failed %v", err)
 					return err
 				}
@@ -150,27 +167,34 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 				err = sm.Conn.WriteServer(hs_packet)
 				if err != nil {
 					log.Printf("[handshake state] Handshake packet send failed %v", err)
+					playerMetric.ServerConnectFailed += 1
+					logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
 					return err
 				}
 				if Data.Tail != nil {
 					err = sm.Conn.WriteServer(Data.Tail)
 					if err != nil {
 						log.Printf("[handshake state] additional packet send failed %v", err)
+						playerMetric.ServerConnectFailed += 1
+						logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
 						return err
 					}
 				}
 				StateChangeLock.Unlock()
 				return nil
 			}
+			logPusher.PushErrorMetric(metric.ErrorMetric{HostnameResolveFailed: 1})
 			return errors.New("[Handshake State] host config file malformed")
 		}
 		playerMetric.HostnameResolveFailed += 1
+		logPusher.PushErrorMetric(metric.ErrorMetric{HostnameResolveFailed: 1})
 		return errors.New(fmt.Sprintf("[Handshake State] Host %s not found", *hostname))
 	}
 
 	var statusReqHandler state.Function = func(i state.IState) error {
 		log.Printf("[Status request state] Enter")
-		sm.proxyMetric.PlayerGetStatus++
+		// sm.proxyMetric.PlayerGetStatus++
+		logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
 		// select {
 		// case sData := <-sm.Conn.ServerData:
 		// 	log.Printf("[Status request state] Status data: %x", sData)
@@ -181,48 +205,48 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		// case <-sm.Conn.Ctx.Done():
 		// 	return errors.New("context Done")
 		// }
-		p := pac.StatusData{}
-		p.Description.Extra = append(p.Description.Extra, pac.StatusDesExtra{Text: sm.Conn.ClientAddress})
-		p.Players.Max = 20
-		p.Players.Online = int(serverMetric.PlayerPlaying)
-		p.Version.Name = "1.20.4"
-		p.Version.Protocol = 765
-		p.Modinfo.ModList = []string{}
-		p.Modinfo.Type = "FML"
+		// p := pac.StatusData{}
+		// p.Description.Extra = append(p.Description.Extra, pac.StatusDesExtra{Text: sm.Conn.ClientAddress})
+		// p.Players.Max = 20
+		// p.Players.Online = int(serverMetric.PlayerPlaying)
+		// p.Version.Name = "1.20.4"
+		// p.Version.Protocol = 765
+		// p.Modinfo.ModList = []string{}
+		// p.Modinfo.Type = "FML"
 
-		// packet := pac.Packet[*pac.Status]{Data: &pac.Status{}}
-		packet := pac.Status{Json: p.JSONString()}
-		// packet.Data.Json = p.JSONString()
-		// buf := make([]byte, 1024)
-		res, err := packet.Encode()
-		if err != nil {
-			log.Println(err)
-			return err
-		}
-		StateChangeLock.Lock()
-		// res, _ := hex.DecodeString("6800667b2276657273696f6e223a7b226e616d65223a22506170657220312e32302e34222c2270726f746f636f6c223a3736357d2c226465736372697074696f6e223a224c6162222c22706c6179657273223a7b226d6178223a32302c226f6e6c696e65223a307d7d")
-		// log.Printf("[Status state] sending status res: %s", p.JSONString())
-		sm.Conn.WriteClient(res)
-		StateChangeLock.Unlock()
-		// if bytes.Equal(Data.Data.Tail, []byte{0x01, 0x00}) {
-		// 	log.Printf("[Status request state] Pong")
-		// 	StateChangeLock.Lock()
-		// 	sm.Conn.WriteClient([]byte{0x01, 0x00})
-		// 	StateChangeLock.Unlock()
-		// 	return nil
+		// // packet := pac.Packet[*pac.Status]{Data: &pac.Status{}}
+		// packet := pac.Status{Json: p.JSONString()}
+		// // packet.Data.Json = p.JSONString()
+		// // buf := make([]byte, 1024)
+		// res, err := packet.Encode()
+		// if err != nil {
+		// 	log.Println(err)
+		// 	return err
 		// }
-		var data []byte
-		select {
-		case <-time.After(3 * time.Second):
-			log.Printf("[Status request state] ping timeout")
-			return nil
-		case d := <-sm.Conn.ClientData:
-			log.Println(d)
-			data = d
-		}
-		StateChangeLock.Lock()
-		sm.Conn.WriteClient(data)
-		StateChangeLock.Unlock()
+		// StateChangeLock.Lock()
+		// // res, _ := hex.DecodeString("6800667b2276657273696f6e223a7b226e616d65223a22506170657220312e32302e34222c2270726f746f636f6c223a3736357d2c226465736372697074696f6e223a224c6162222c22706c6179657273223a7b226d6178223a32302c226f6e6c696e65223a307d7d")
+		// // log.Printf("[Status state] sending status res: %s", p.JSONString())
+		// sm.Conn.WriteClient(res)
+		// StateChangeLock.Unlock()
+		// // if bytes.Equal(Data.Data.Tail, []byte{0x01, 0x00}) {
+		// // 	log.Printf("[Status request state] Pong")
+		// // 	StateChangeLock.Lock()
+		// // 	sm.Conn.WriteClient([]byte{0x01, 0x00})
+		// // 	StateChangeLock.Unlock()
+		// // 	return nil
+		// // }
+		// var data []byte
+		// select {
+		// case <-time.After(3 * time.Second):
+		// 	log.Printf("[Status request state] ping timeout")
+		// 	return nil
+		// case d := <-sm.Conn.ClientData:
+		// 	log.Println(d)
+		// 	data = d
+		// }
+		// StateChangeLock.Lock()
+		// sm.Conn.WriteClient(data)
+		// StateChangeLock.Unlock()
 		return nil
 	}
 
@@ -240,7 +264,8 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			return nil
 		case <-sm.Conn.Ctx.Done():
 			if *isLoggedIn {
-				sm.proxyMetric.PlayerPlaying--
+				// sm.proxyMetric.PlayerPlaying--
+				logPusher.PushProxyMetric(metric.ProxyMetric{PlayerPlaying: -1})
 			}
 			return errors.New("context Done")
 		}
@@ -250,7 +275,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		StateChangeLock.Lock()
 		defer StateChangeLock.Unlock()
 		if *isLoggedIn {
-			sm.proxyMetric.PlayerPlaying--
+			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerPlaying: -1})
 		}
 		sm.Conn.CloseConn()
 		// (*sm.Conn.ServerConn).Close()
@@ -259,35 +284,36 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 
 	var pingHandler state.Function = func(i state.IState) error {
 		log.Printf("[Ping request state] Enter")
-		var data []byte
-		select {
-		case <-time.After(3 * time.Second):
-			log.Printf("[Ping request state] ping timeout")
-			return nil
-		case d := <-sm.Conn.ClientData:
-			log.Println(d)
-			data = d
-		}
-		log.Printf("[Ping request state] Got ping req")
-		StateChangeLock.Lock()
-		// buf, err := Data.Encode()
-		// if err != nil {
-		// 	return err
+		logPusher.PushProxyMetric(metric.ProxyMetric{Ping: 1})
+		// var data []byte
+		// select {
+		// case <-time.After(3 * time.Second):
+		// 	log.Printf("[Ping request state] ping timeout")
+		// 	return nil
+		// case d := <-sm.Conn.ClientData:
+		// 	log.Println(d)
+		// 	data = d
 		// }
-		sm.Conn.WriteClient(data)
-		StateChangeLock.Unlock()
+		// log.Printf("[Ping request state] Got ping req")
+		// StateChangeLock.Lock()
+		// // buf, err := Data.Encode()
+		// // if err != nil {
+		// // 	return err
+		// // }
+		// sm.Conn.WriteClient(data)
+		// StateChangeLock.Unlock()
 		return nil
 	}
 
-	var httpHandler state.Function = func(i state.IState) error {
-		log.Printf("[http state] Enter")
-		rawResponse := "HTTP/1.1 301 Moved Permanently\r\n" +
-			"Location: https://www.youtube.com/watch?v=dQw4w9WgXcQ\r\n" +
-			"Content-Type: text/html; charset=UTF-8\r\n" +
-			"Content-Length: 0\r\n" +
-			"\r\n"
-		return sm.Conn.WriteClient([]byte(rawResponse))
-	}
+	// var httpHandler state.Function = func(i state.IState) error {
+	// 	log.Printf("[http state] Enter")
+	// 	rawResponse := "HTTP/1.1 301 Moved Permanently\r\n" +
+	// 		"Location: https://www.youtube.com/watch?v=dQw4w9WgXcQ\r\n" +
+	// 		"Content-Type: text/html; charset=UTF-8\r\n" +
+	// 		"Content-Length: 0\r\n" +
+	// 		"\r\n"
+	// 	return sm.Conn.WriteClient([]byte(rawResponse))
+	// }
 
 	// state
 	initState := state.NewState(initHandler)
@@ -318,8 +344,9 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			log.Printf("[Loging state] Player %s logged in", p.Name)
 			sm.playerMetric.PlayerName = p.Name
 			sm.playerMetric.LogginTime = time.Now()
-			sm.proxyMetric.PlayerLogin++
-			sm.proxyMetric.PlayerPlaying++
+			// sm.proxyMetric.PlayerLogin++
+			// sm.proxyMetric.PlayerPlaying++
+			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerLogin: 1, PlayerPlaying: 1})
 			sm.Conn.WriteServer(cData)
 			StateChangeLock.Unlock()
 			return nil
@@ -332,7 +359,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	passthroughState := state.NewState(passthroughHandler)
 	rejectState := state.NewState(rejectHandler)
 	pingState := state.NewState(pingHandler)
-	httpState := state.NewState(httpHandler)
+	// httpState := state.NewState(httpHandler)
 
 	// var HaltTransistion state.ConditionFunction = func() bool {
 	// 	log.Println(sm.Conn.Ctx.Err())
@@ -355,11 +382,11 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 
 	sm.TransistionFunction("handshake", func(i state.IState) (state.IState, error) {
 		if isHttp {
-			return httpState, nil
+			return nil, nil
 		}
 		if Data.NextState == 0x01 && Data.ID == 0 {
 			// go collector.Collect()
-			return passthroughState, nil
+			return statusReqState, nil
 		}
 		if *hostname == "" || sm.Conn.PreConditionCheck() != nil {
 			return rejectState, nil
@@ -367,7 +394,8 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		return loginState, nil
 	})
 
-	sm.TransistionCondition(TransistionPair{Source: "status", Destination: "reject"}, state.True)
+	sm.TransistionCondition(TransistionPair{Source: "status", Destination: "ping"}, state.True)
+	sm.TransistionCondition(TransistionPair{Source: "ping", Destination: "passthough"}, state.True)
 
 	// sm.TransistionCondition(TransistionPair{Source: "ping", Destination: ""}, state.True)
 	sm.TransistionCondition(TransistionPair{Source: "login", Destination: "passthough"}, state.True)
@@ -392,6 +420,6 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 
 	sm.Construct()
 	sm.SetRoot("init")
-	go sm.Run()
+	// go sm.Run()
 	return sm
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	proxy "mc_reverse_proxy/src/proxy"
 )
 
@@ -37,9 +36,7 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	} else {
-		for {
-			log.Printf("[Proxy] Accept ready")
-			p.Serve()
-		}
+		p.Serve()
 	}
+
 }

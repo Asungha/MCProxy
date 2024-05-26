@@ -7,7 +7,6 @@ import (
 	"log"
 	metric "mc_reverse_proxy/src/metric"
 	"net"
-	"runtime"
 	"sync"
 )
 
@@ -223,7 +222,7 @@ func (c *Connection) CloseConn() error {
 
 func (c *Connection) Destroy() {
 	c.CloseConn()
-	runtime.GC()
+	// runtime.GC()
 }
 
 func NewConnection(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) *Connection {

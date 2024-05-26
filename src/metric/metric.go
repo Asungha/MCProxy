@@ -52,10 +52,11 @@ type Loggable interface {
 var starttime *time.Time
 
 type SystemMetric struct {
-	StartTime      time.Time
-	ProcessorCount uint
-	ThreadCount    uint
-	CPUPercentage  float64
+	StartTime          time.Time
+	ProcessorCount     uint
+	ThreadCount        uint
+	ProxyCPUPercentage float64
+	// SystemCPUPercentage float64
 	CPUTime        float64
 	HeapMemoryUsed uint
 	HeapMemoryFree uint
@@ -71,8 +72,9 @@ func (m *SystemMetric) GetSystemMetric() string {
 	formatter.Add("mcproxy_sys_uptime", strconv.FormatInt(int64(time.Since(*starttime).Seconds()), 10), filter)
 	formatter.Add("mcproxy_sys_processor_count", strconv.FormatInt(int64(m.ProcessorCount), 10), filter)
 	formatter.Add("mcproxy_sys_threads_count", strconv.FormatInt(int64(m.ThreadCount), 10), filter)
-	formatter.Add("mcproxy_sys_cpu_percentage", fmt.Sprint(m.CPUPercentage), filter)
-	formatter.Add("mcproxy_sys_cpu_time", fmt.Sprint(m.CPUTime, 32), filter)
+	formatter.Add("mcproxy_sys_proxy_cpu_percentage", fmt.Sprint(m.ProxyCPUPercentage), filter)
+	// formatter.Add("mcproxy_sys_cpu_percentage", fmt.Sprint(m.SystemCPUPercentage), filter)
+	formatter.Add("mcproxy_sys_cpu_time", fmt.Sprint(m.CPUTime), filter)
 	formatter.Add("mcproxy_sys_memory_heap_used", strconv.FormatInt(int64(m.HeapMemoryUsed), 10), filter)
 	formatter.Add("mcproxy_sys_memory_heap_free", strconv.FormatInt(int64(m.HeapMemoryFree), 10), filter)
 	return formatter.Get()
@@ -116,9 +118,11 @@ func (m *NetworkMetric) GetNetworkMetric() string {
 }
 
 type ProxyMetric struct {
-	PlayerGetStatus uint
-	PlayerLogin     uint
-	PlayerPlaying   uint
+	PlayerGetStatus int
+	PlayerLogin     int
+	PlayerPlaying   int
+	Ping            int
+	Connected       int
 }
 
 func (m *ProxyMetric) GetProxyMetric() string {
@@ -126,8 +130,17 @@ func (m *ProxyMetric) GetProxyMetric() string {
 	formatter := PrometheusFormatter{}
 	formatter.Add("mcproxy_proxy_get_status", strconv.FormatInt(int64(m.PlayerGetStatus), 10), filter)
 	formatter.Add("mcproxy_proxy_login", strconv.FormatInt(int64(m.PlayerLogin), 10), filter)
+	formatter.Add("mcproxy_proxy_ping", strconv.FormatInt(int64(m.Ping), 10), filter)
 	formatter.Add("mcproxy_proxy_playing", strconv.FormatInt(int64(m.PlayerPlaying), 10), filter)
+	formatter.Add("mcproxy_proxy_connected", strconv.FormatInt(int64(m.Connected), 10), filter)
 	return formatter.Get()
+}
+
+func (m *ProxyMetric) Sum(a ProxyMetric) {
+	m.PlayerGetStatus += a.PlayerGetStatus
+	m.PlayerLogin += a.PlayerLogin
+	m.PlayerPlaying += a.PlayerPlaying
+	m.Connected += a.Connected
 }
 
 type ErrorMetric struct {
@@ -136,6 +149,8 @@ type ErrorMetric struct {
 	PacketDeserializeFailed uint
 	HostnameResolveFailed   uint
 	ServerConnectFailed     uint
+
+	LogOverflow uint
 }
 
 func (m *ErrorMetric) Sum(a ErrorMetric) {
@@ -144,6 +159,7 @@ func (m *ErrorMetric) Sum(a ErrorMetric) {
 	m.PacketDeserializeFailed += m.PacketDeserializeFailed
 	m.HostnameResolveFailed += a.HostnameResolveFailed
 	m.ServerConnectFailed += a.ServerConnectFailed
+	m.LogOverflow += a.LogOverflow
 }
 
 func (m *ErrorMetric) GetErrorMetric() string {
@@ -154,6 +170,7 @@ func (m *ErrorMetric) GetErrorMetric() string {
 	formatter.Add("mcproxy_error_deserialization_failed", strconv.FormatInt(int64(m.PacketDeserializeFailed), 10), filter)
 	formatter.Add("mcproxy_error_hostname_resolve_failed", strconv.FormatInt(int64(m.HostnameResolveFailed), 10), filter)
 	formatter.Add("mcproxy_error_server_connect_failed", strconv.FormatInt(int64(m.ServerConnectFailed), 10), filter)
+	formatter.Add("mcproxy_error_log_overflow", strconv.FormatInt(int64(m.LogOverflow), 10), filter)
 	return formatter.Get()
 }
 
@@ -217,7 +234,7 @@ func (m *PlayerMetric) GetPlayerMetric() string {
 }
 
 func (m *Metric) GetMetric() string {
-	m.ProxyMetric.PlayerPlaying = uint(len(m.playerMetric) - 1)
+	m.ProxyMetric.PlayerPlaying = len(m.playerMetric) - 1
 	d := (m.GetNetworkMetric() + m.GetErrorMetric() + m.GetSystemMetric() + m.GetProxyMetric())
 	for _, playerMetric := range m.playerMetric {
 		d += playerMetric.GetPlayerMetric()
@@ -228,8 +245,31 @@ func (m *Metric) GetMetric() string {
 }
 
 type MetricCollecter struct {
-	LogEntities map[string]Loggable
-	mutex       *sync.Mutex
+	LogEntities            map[string]Loggable
+	mutex                  *sync.Mutex
+	LastProxyCPUTime       float64
+	LastSystemTotalCPUTime float64
+
+	PushChannel      chan Log
+	PushBuffer       []*Log
+	PushedLog        int
+	LogOverflowCount int
+	pushMutex        *sync.Mutex
+
+	lastMetric Metric
+}
+
+func (c *MetricCollecter) readPushedLog() {
+	for {
+		log := <-c.PushChannel
+		// fmt.Println("Got log")s
+		c.pushMutex.Lock()
+		if len(c.PushBuffer) >= 80960 {
+			c.PushBuffer = c.PushBuffer[1:]
+		}
+		c.PushBuffer = append(c.PushBuffer, &log)
+		c.pushMutex.Unlock()
+	}
 }
 
 func (c *MetricCollecter) systemMetric() (SystemMetric, error) {
@@ -256,15 +296,27 @@ func (c *MetricCollecter) systemMetric() (SystemMetric, error) {
 		return SystemMetric{}, err
 	}
 	if len(overallCPUTimes) > 0 {
-		totalCPUDelta := overallCPUTimes[0].Total() - cpuTimes.Total()
-		processCPUUsage := (cpuTimes.Total() / totalCPUDelta) * 100
+		// systemTotal := overallCPUTimes[0].Total() - cpuTimes.Total()
+		// processCPUUsage := (cpuTimes.Total() - c.lastCPUTime/diffSystem) * 100
+		// c.lastCPUTime = cpuTimes.Total()
+		proxyCPUTime := cpuTimes.Total()
+		systemCPUTime := overallCPUTimes[0].Total()
+		diffProxyCPUTime := proxyCPUTime - c.LastProxyCPUTime
+		diffSystemCPUTime := systemCPUTime - c.LastSystemTotalCPUTime
+
+		percentageProxyCPU := (diffProxyCPUTime / diffSystemCPUTime) * 100
+		// percentageSystemCPU := ((diffSystemCPUTime - diffProxyCPUTime) / diffSystemCPUTime) * 100
+
+		c.LastProxyCPUTime = proxyCPUTime
+		c.LastSystemTotalCPUTime = systemCPUTime
 		return SystemMetric{
-			ThreadCount:    uint(runtime.NumGoroutine()),
-			HeapMemoryUsed: uint(mem.HeapAlloc),
-			HeapMemoryFree: uint(mem.HeapIdle),
-			ProcessorCount: *ProcessorCount,
-			CPUPercentage:  processCPUUsage,
-			CPUTime:        cpuTimes.Total(),
+			ThreadCount:        uint(runtime.NumGoroutine()),
+			HeapMemoryUsed:     uint(mem.HeapAlloc),
+			HeapMemoryFree:     uint(mem.HeapIdle),
+			ProcessorCount:     *ProcessorCount,
+			ProxyCPUPercentage: percentageProxyCPU, // CPU used by proxy
+			// SystemCPUPercentage: percentageSystemCPU, // CPU used by the rest of the host system
+			CPUTime: cpuTimes.Total(),
 		}, nil
 	}
 	return SystemMetric{}, errors.New("Failed to get system metric")
@@ -292,21 +344,78 @@ func (c *MetricCollecter) Collect() (Metric, error) {
 	if err != nil {
 		return Metric{}, err
 	}
-	metric := Metric{SystemMetric: sys, playerMetric: make(map[string]PlayerMetric)}
+	c.lastMetric.SystemMetric = sys
+	c.lastMetric.playerMetric = map[string]PlayerMetric{}
+	// if
 	for _, e := range c.LogEntities {
 		log := e.Log()
-		if (ProxyMetric{}) != log.ProxyMetric {
-			metric.ProxyMetric = log.ProxyMetric
-		}
-		metric.NetworkMetric.Sum(log.NetworkMetric)
-		metric.ErrorMetric.Sum(log.ErrorMetric)
-		metric.playerMetric[log.PlayerName+log.IP] = log.PlayerMetric
+		// if (ProxyMetric{}) != log.ProxyMetric {
+		// 	metric.ProxyMetric.Sum(log.ProxyMetric)
+		// }
+		c.lastMetric.ProxyMetric.Sum(log.ProxyMetric)
+		c.lastMetric.NetworkMetric.Sum(log.NetworkMetric)
+		c.lastMetric.ErrorMetric.Sum(log.ErrorMetric)
+		c.lastMetric.playerMetric[log.PlayerName+log.IP] = log.PlayerMetric
 	}
-	return metric, nil
+	c.pushMutex.Lock()
+	log.Printf("[Metric Collector] Reading %d logs", len(c.PushBuffer))
+	for _, log := range c.PushBuffer {
+		if log == nil {
+			continue
+		}
+		// fmt.Println(log)
+		// log := e.Log()
+		// if (ProxyMetric{}) != log.ProxyMetric {
+		// 	metric.ProxyMetric.Sum(log.ProxyMetric)
+		// }
+		c.lastMetric.ProxyMetric.Sum(log.ProxyMetric)
+		c.lastMetric.NetworkMetric.Sum(log.NetworkMetric)
+		c.lastMetric.ErrorMetric.Sum(log.ErrorMetric)
+		c.lastMetric.playerMetric[log.PlayerName+log.IP] = log.PlayerMetric
+	}
+	c.PushBuffer = []*Log{}
+	c.pushMutex.Unlock()
+	return c.lastMetric, nil
+}
+
+func (c *MetricCollecter) PushLog(log Log) error {
+	done := make(chan bool)
+	go func() {
+		c.PushChannel <- log
+		done <- true
+	}()
+	select {
+	case <-time.After(time.Millisecond * 100):
+		c.pushMutex.Lock()
+		defer c.pushMutex.Unlock()
+		c.LogOverflowCount++
+		return errors.New("Log buffer overflow")
+	case <-done:
+		c.pushMutex.Lock()
+		c.PushedLog += 1
+		c.pushMutex.Unlock()
+	}
+	return nil
 }
 
 func NewMetricCollector() *MetricCollecter {
-	return &MetricCollecter{LogEntities: make(map[string]Loggable), mutex: &sync.Mutex{}}
+	cputime := 0.0
+	overallCPUTimes, errCpu := cpu.Times(false)
+	if errCpu == nil {
+		// log.Printf("[Metric] Error getting cpu utilization: %v", errCpu)
+		cputime = overallCPUTimes[0].Total()
+	}
+	mc := &MetricCollecter{
+		LogEntities:            make(map[string]Loggable),
+		mutex:                  &sync.Mutex{},
+		LastProxyCPUTime:       0.0,
+		LastSystemTotalCPUTime: cputime,
+		PushChannel:            make(chan Log, 16),
+		PushBuffer:             make([]*Log, 80960),
+		pushMutex:              &sync.Mutex{},
+	}
+	go mc.readPushedLog()
+	return mc
 }
 
 type IMetricExporter interface {

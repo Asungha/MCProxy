@@ -98,7 +98,12 @@ func (p *Proxy) Serve() {
 	// 	// 	return
 	// 	// }
 	// }()
-
+	// stmChann := make(chan *statemachine.NetworkStateMachine, 16)
+	// go func() {
+	// 	for {
+	// 		stmChann <- statemachine.NewNetworkStatemachine(p.Listener, GetServerList(), &p.ProxyMetric)
+	// 	}
+	// }()
 	if p.metricExporter != nil && !p.init {
 		go func(p *Proxy) {
 			defer log.Println("[metricExporter] Thread exit")
@@ -106,18 +111,20 @@ func (p *Proxy) Serve() {
 		}(p)
 		p.init = true
 	}
+	serverList := GetServerList()
+	for {
+		statemachine := statemachine.NewNetworkStatemachine(p.Listener, serverList, &p.ProxyMetric, p.MetricCollector)
+		go statemachine.Run()
+		<-statemachine.ClientConnected
 
-	statemachine := statemachine.NewNetworkStatemachine(p.Listener, GetServerList(), &p.ProxyMetric)
-	// go statemachine.Run()
-	<-statemachine.ClientConnected
-
-	log.Printf("[Proxy] Connection between proxy and client established")
-	uuid := p.MetricCollector.Register(statemachine)
-	go func(uuid string) {
-		<-statemachine.Ctx.Done()
-		log.Printf("[sm manager] cleanup")
-		p.MetricCollector.Unregister(uuid)
-	}(uuid)
+		log.Printf("[Proxy] Connection between proxy and client established")
+		// uuid := p.MetricCollector.Register(statemachine)
+		go func(uuid string) {
+			<-statemachine.Ctx.Done()
+			log.Printf("[sm manager] cleanup")
+			// p.MetricCollector.Unregister(uuid)
+		}("")
+	}
 }
 
 func NewProxy(port string) (Iproxy, error) {

@@ -1,6 +1,7 @@
 package statemachine
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -111,6 +112,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			hs := pac.Handshake{}
 			// data := pac.Handshake{Data: &hs}
 			// err := data.Decode(&rawData, len(rawData))
+			log.Printf("%x", rawData)
 			if utils.IsHTTPMethod(strings.Split(string(rawData), " ")[0]) {
 				isHttp = true
 				playerMetric.PacketDeserializeFailed += 1
@@ -120,6 +122,9 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			err := hs.Decode(rawData)
 			if err != nil {
 				playerMetric.PacketDeserializeFailed += 1
+				if bytes.Equal(rawData[:2], []byte{0xfe, 0x01}) {
+					logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
+				}
 				logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
 				return err
 			}
@@ -138,6 +143,11 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 				return err
 			}
 			loginpayload = &l
+		}
+		if Data.NextState == 0x01 {
+			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
+		} else if Data.NextState == 0x02 {
+			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerLogin: 1})
 		}
 		if data, ok := sm.Conn.ServerList[*hostname]; ok {
 			log.Printf("%v", Data)
@@ -194,7 +204,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	var statusReqHandler state.Function = func(i state.IState) error {
 		log.Printf("[Status request state] Enter")
 		// sm.proxyMetric.PlayerGetStatus++
-		logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
+		// logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
 		// select {
 		// case sData := <-sm.Conn.ServerData:
 		// 	log.Printf("[Status request state] Status data: %x", sData)
@@ -284,7 +294,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 
 	var pingHandler state.Function = func(i state.IState) error {
 		log.Printf("[Ping request state] Enter")
-		logPusher.PushProxyMetric(metric.ProxyMetric{Ping: 1})
+		// logPusher.PushProxyMetric(metric.ProxyMetric{Ping: 1})
 		// var data []byte
 		// select {
 		// case <-time.After(3 * time.Second):
@@ -320,14 +330,15 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	handshakeState := state.NewState(handshakeHandler)
 	statusReqState := state.NewState(statusReqHandler)
 	loginState := state.NewState(func(i state.IState) error {
+		// logPusher.PushProxyMetric(metric.ProxyMetric{PlayerLogin: 1})
 		if loginpayload != nil {
 			res, err := loginpayload.Encode()
 			if err != nil {
 				return err
 			}
-			packet := pac.Packet{PacketHeader: loginpayload.PacketHeader, Payload: res}
+			// packet := pac.Packet{PacketHeader: loginpayload.PacketHeader, Payload: res}
 			go func() {
-				sm.Conn.ClientData <- pac.Serialize(packet)
+				sm.Conn.ClientData <- res
 			}()
 		}
 		select {
@@ -346,7 +357,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			sm.playerMetric.LogginTime = time.Now()
 			// sm.proxyMetric.PlayerLogin++
 			// sm.proxyMetric.PlayerPlaying++
-			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerLogin: 1, PlayerPlaying: 1})
+			// logPusher.PushProxyMetric(metric.ProxyMetric{PlayerLogin: 1, PlayerPlaying: 1})
 			sm.Conn.WriteServer(cData)
 			StateChangeLock.Unlock()
 			return nil
@@ -381,15 +392,12 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 	sm.TransistionCondition(TransistionPair{Source: "init", Destination: "handshake"}, state.True)
 
 	sm.TransistionFunction("handshake", func(i state.IState) (state.IState, error) {
-		if isHttp {
+		if isHttp || *hostname == "" || sm.Conn.PreConditionCheck() != nil {
 			return nil, nil
 		}
 		if Data.NextState == 0x01 && Data.ID == 0 {
 			// go collector.Collect()
 			return statusReqState, nil
-		}
-		if *hostname == "" || sm.Conn.PreConditionCheck() != nil {
-			return rejectState, nil
 		}
 		return loginState, nil
 	})

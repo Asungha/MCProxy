@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,7 +18,7 @@ type PacketHeader struct {
 	ID     byte
 }
 type Packet struct {
-	Payload []byte
+	Payload *bytes.Reader
 	PacketHeader
 }
 
@@ -25,11 +26,21 @@ func (rp *Packet) Check() error {
 	if rp.Length == 0 {
 		return errors.New("Packet length not found")
 	}
-	if int(rp.Length) > 1+len(rp.Payload) {
-		return errors.New(fmt.Sprintf("Packet length incorrect: length %d of data %x", int(rp.Length), string(rp.Payload)))
+	if int(rp.Length) > 1+rp.Payload.Len() {
+		buf := make([]byte, rp.Payload.Len())
+		_, err := rp.Payload.Read(buf)
+		if err != nil {
+			return err
+		}
+		return errors.New(fmt.Sprintf("Packet length incorrect: length %d of data %x", int(rp.Length), buf))
 	}
-	if len(rp.Payload) > 256 {
-		return errors.New(fmt.Sprintf("Packet length oversize: length %d of data %x", int(rp.Length), string(rp.Payload)))
+	if rp.Payload.Len() > 256 {
+		buf := make([]byte, rp.Payload.Len())
+		_, err := rp.Payload.Read(buf)
+		if err != nil {
+			return err
+		}
+		return errors.New(fmt.Sprintf("Packet length oversize: length %d of data %x", int(rp.Length), buf))
 	}
 	return nil
 }
@@ -38,9 +49,11 @@ func Serialize(packet Packet) []byte {
 	data := packet.Payload
 	id := make([]byte, 1)
 	idn := binary.PutVarint(id, int64(packet.ID))
-	encoded := append(id[:idn], data...)
+	buf := make([]byte, data.Len())
+	data.Read(buf)
+	encoded := append(id[:idn], buf...)
 	length := make([]byte, binary.MaxVarintLen64)
-	sn := binary.PutUvarint(length, uint64(len(packet.Payload)+idn))
+	sn := binary.PutUvarint(length, uint64(packet.Length+uint64(idn)))
 	return append(length[:sn], encoded...)
 }
 
@@ -55,7 +68,7 @@ func Deserialize(data []byte) (Packet, RemainingData, error) {
 		return Packet{}, []byte{}, err
 	}
 	id := data[n_length]
-	raw := Packet{PacketHeader: PacketHeader{ID: id, Length: length}, Payload: data[n_length+1:]}
+	raw := Packet{PacketHeader: PacketHeader{ID: id, Length: length}, Payload: bytes.NewReader(data[n_length+1:])}
 	if err := raw.Check(); err != nil {
 		return Packet{}, []byte{}, err
 	}

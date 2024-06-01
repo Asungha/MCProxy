@@ -8,7 +8,7 @@ import (
 )
 
 func UvarintReader(r io.Reader) (int, error) {
-	varint, err := binary.ReadUvarint(&byteReader{r})
+	varint, err := binary.ReadUvarint(&ByteReader{r})
 	if err != nil {
 		return 0, err
 	}
@@ -16,7 +16,7 @@ func UvarintReader(r io.Reader) (int, error) {
 }
 
 func VarintReader(r io.Reader) (int, error) {
-	varint, err := binary.ReadVarint(&byteReader{r})
+	varint, err := binary.ReadVarint(&ByteReader{r})
 	if err != nil {
 		return 0, err
 	}
@@ -24,11 +24,11 @@ func VarintReader(r io.Reader) (int, error) {
 }
 
 // byteReader wraps an io.Reader to implement io.ByteReader
-type byteReader struct {
+type ByteReader struct {
 	r io.Reader
 }
 
-func (b *byteReader) ReadByte() (byte, error) {
+func (b *ByteReader) ReadByte() (byte, error) {
 	var buf [1]byte
 	_, err := b.r.Read(buf[:])
 	// log.Printf("Readed %d", n)
@@ -84,7 +84,7 @@ func ValidateDataframe(buffer []byte) error {
 		// }
 
 		// Process the dataframe (length, id, payload)
-		// fmt.Printf("Dataframe - Length: %d, ID: %d, Payload: %x\n", length, id, payload)
+		fmt.Printf("Dataframe - Length: %d Payload: %x\n", length, buf)
 	}
 
 	return nil

@@ -1,6 +1,7 @@
 package packet
 
 import (
+	"bytes"
 	"fmt"
 
 	// hex "mc_reverse_proxy/src/utils"
@@ -52,7 +53,7 @@ func (h *Handshake) Encode() ([]byte, error) {
 	port := make([]byte, 2)
 	binary.BigEndian.PutUint16(port, uint16(h.Port))
 	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
-	packet := Packet{PacketHeader: PacketHeader{Length: uint64(len(raw) + 1), ID: 0x00}, Payload: raw}
+	packet := Packet{PacketHeader: PacketHeader{Length: uint64(len(raw)), ID: 0x00}, Payload: bytes.NewReader(raw)}
 	if err := packet.Check(); err != nil {
 		return []byte{}, err
 	}
@@ -65,23 +66,51 @@ func (h *Handshake) Decode(data []byte) error {
 		return err
 	}
 	h.PacketHeader = packet.PacketHeader
-	n := int(packet.Length)
-	protocolVersion, v_length := binary.Uvarint(packet.Payload)
-	if n-v_length <= 0 {
-		return fmt.Errorf("invalid ProtocolVersion: %d", protocolVersion)
+	// n := int(packet.Length)
+	// protocolVersion, v_length := binary.Uvarint(packet.Payload)
+	protocolVersion, err := utils.UvarintReader(packet.Payload)
+	if err != nil {
+		return err
 	}
-	h_length, s_length := binary.Uvarint(packet.Payload[v_length:])
-	if n-v_length-s_length <= 0 {
-		return fmt.Errorf("invalid Hostname Length: %d", s_length)
+	// if n-v_length <= 0 {
+	// 	return fmt.Errorf("invalid ProtocolVersion: %d", protocolVersion)
+	// }
+	// h_length, s_length := binary.Uvarint(packet.Payload[v_length:])
+	hostnameLength, err := utils.UvarintReader(packet.Payload)
+	if err != nil {
+		return err
 	}
+	// if n-v_length-s_length <= 0 {
+	// 	return fmt.Errorf("invalid Hostname Length: %d", s_length)
+	// }
 	h.ProtocolVersion = int(protocolVersion)
-	if s_length+v_length > n-4 {
-		return fmt.Errorf("invalid Hostname Length: %d", s_length)
+	// if s_length+v_length > n-4 {
+	// 	return fmt.Errorf("invalid Hostname Length: %d", s_length)
+	// }
+	hostname := make([]byte, hostnameLength)
+	_, err = packet.Payload.Read(hostname)
+	if err != nil {
+		return err
 	}
-	h.Hostname = string(packet.Payload[s_length+v_length : s_length+v_length+int(h_length)])
-	port := binary.BigEndian.Uint16(packet.Payload[s_length+v_length+int(h_length) : s_length+v_length+int(h_length)+2])
-	h.Port = int(port)
-	h.NextState = packet.Payload[v_length+int(h_length)+3 : v_length+int(h_length)+3+1][0]
+
+	h.Hostname = string(hostname)
+
+	port := make([]byte, 2)
+	_, err = packet.Payload.Read(port)
+	if err != nil {
+		return err
+	}
+
+	h.Port = int(binary.BigEndian.Uint16(port))
+
+	// port := binary.BigEndian.Uint16(packet.Payload[s_length+v_length+int(h_length) : s_length+v_length+int(h_length)+2])
+	// h.Port = int(port)
+	nextState := [1]byte{}
+	_, err = packet.Payload.Read(nextState[:])
+	if err != nil {
+		return err
+	}
+	h.NextState = nextState[0]
 	// remainingData := packet.Payload[v_length+int(h_length)+3+1:]
 	if l := len(remainingdate); l != 0 {
 		h.Tail = remainingdate

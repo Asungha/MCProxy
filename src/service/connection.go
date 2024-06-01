@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	metric "mc_reverse_proxy/src/metric"
+	utils "mc_reverse_proxy/src/utils"
 	"net"
 	"sync"
 )
@@ -94,7 +95,18 @@ func (c *Connection) ListenClient() error {
 			data := buf[:n]
 			// c.StateChangeLock.Lock()
 			// log.Printf("Sending data")
-			c.ClientData <- data
+			fragments, err := utils.SplitDataframe(data)
+			if err != nil {
+				log.Printf(err.Error())
+				c.Cancle(err)
+				buf = nil
+				errs <- err
+				return
+			}
+			for _, f := range fragments {
+				c.ClientData <- f
+			}
+			// c.ClientData <- data
 			// log.Printf("Sending datato %v done", c.ClientData)
 			// c.StateChangeLock.Unlock()
 			buf = nil
@@ -125,7 +137,7 @@ func (c *Connection) ListenServer() error {
 	go func(errs chan error) {
 		defer log.Println("[server listener] Thread exit")
 		for {
-			buf := make([]byte, 1024)
+			buf := make([]byte, 12400)
 			// (*c.ServerConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ServerConn).Read(buf)
 			// log.Printf("[server listener Debug] Reading %d bytes from upstream: %x", n, buf[:n])
@@ -142,7 +154,6 @@ func (c *Connection) ListenServer() error {
 			c.NetworkMetric.ServerPacketRx += 1
 			c.NetworkMetric.ServerDataRx += uint(n)
 			data := buf[:n]
-			// c.StateChangeLock.Lock()
 			c.ServerData <- data
 			// c.StateChangeLock.Unlock()
 			buf = nil

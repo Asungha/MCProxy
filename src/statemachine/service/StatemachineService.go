@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"log"
-	state "mc_reverse_proxy/src/state/state"
+	state "mc_reverse_proxy/src/statemachine/dto"
+	statemachineDTO "mc_reverse_proxy/src/statemachine/dto"
 )
 
-type State string
+// type State string
 type TransistionPair struct {
 	Source      string
 	Destination string
@@ -18,46 +19,46 @@ type Condition struct {
 }
 
 type IStateMachine interface {
-	RegisterState(state.IState) error
-	State(State) state.IState
+	RegisterState(statemachineDTO.IState) error
+	State(statemachineDTO.State) statemachineDTO.IState
 	TransistionCondition(pair TransistionPair, condition func() bool)
 	Construct() error
 	Destruct() error
-	SetRoot(State)
+	SetRoot(statemachineDTO.State)
 	Run() error
 }
 
-type AStateMachine struct {
-	currectState state.IState
-	States       map[string]state.IState
+type StateMachine struct {
+	currectState statemachineDTO.IState
+	States       map[string]statemachineDTO.IState
 	Conditions   []Condition
 	Ctx          context.Context
 	Cancle       context.CancelCauseFunc
-	DeferFunc    state.DeferFunction
+	DeferFunc    statemachineDTO.DeferFunction
 	IStateMachine
 }
 
-func (sm *AStateMachine) RegisterState(stateName State, s state.IState) error {
+func (sm *StateMachine) RegisterState(stateName string, s statemachineDTO.IState) error {
 	if sm.States == nil {
-		sm.States = make(map[string]state.IState)
+		sm.States = make(map[string]statemachineDTO.IState)
 		sm.States[""] = nil
 	}
 	sm.States[string(stateName)] = s
 	return nil
 }
 
-func (sm *AStateMachine) TransistionCondition(pair TransistionPair, condition state.ConditionFunction) {
+func (sm *StateMachine) TransistionCondition(pair TransistionPair, condition statemachineDTO.ConditionFunction) {
 	sm.Conditions = append(sm.Conditions, Condition{Fx: condition, TransistionPair: pair})
 }
 
-func (sm *AStateMachine) TransistionFunction(source State, fx state.TransistionFunction) {
+func (sm *StateMachine) TransistionFunction(source string, fx statemachineDTO.TransistionFunction) {
 	(sm.States[string(source)]).AddTransistionFunction(fx)
 }
 
-func (sm *AStateMachine) Construct() error {
+func (sm *StateMachine) Construct() error {
 	for _, condition := range sm.Conditions {
 		c := condition
-		var fx state.TransistionFunction = func(i state.IState) (state.IState, error) {
+		var fx statemachineDTO.TransistionFunction = func(i statemachineDTO.IState) (statemachineDTO.IState, error) {
 			if c.Fx() {
 				return sm.States[c.Destination], nil
 			}
@@ -68,7 +69,7 @@ func (sm *AStateMachine) Construct() error {
 	return nil
 }
 
-func (sm *AStateMachine) Destruct() error {
+func (sm *StateMachine) Destruct() error {
 	sm.Cancle(errors.New("Desturct Called"))
 	for _, state := range sm.States {
 		if state == nil {
@@ -84,15 +85,15 @@ func (sm *AStateMachine) Destruct() error {
 	return nil
 }
 
-func (sm *AStateMachine) SetRoot(state State) {
+func (sm *StateMachine) SetRoot(state string) {
 	sm.currectState = sm.States[string(state)]
 }
 
-func (sm *AStateMachine) State(s State) state.IState {
+func (sm *StateMachine) State(s string) state.IState {
 	return sm.States[string(s)]
 }
 
-func (sm *AStateMachine) Run() error {
+func (sm *StateMachine) Run() error {
 	// defer log.Println("[statemachine worker] Thread exit")
 	// log.Println("[statemachine worker] start")
 	defer sm.Destruct()

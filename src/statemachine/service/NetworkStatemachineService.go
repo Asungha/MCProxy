@@ -6,10 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"mc_reverse_proxy/src/metric"
-	pac "mc_reverse_proxy/src/packet"
-	service "mc_reverse_proxy/src/service"
-	state "mc_reverse_proxy/src/state/state"
+	metricDTO "mc_reverse_proxy/src/metric/dto"
+	metricService "mc_reverse_proxy/src/metric/service"
+	pac "mc_reverse_proxy/src/network/packet"
+	networkService "mc_reverse_proxy/src/network/service"
+
+	// statemachine "mc_reverse_proxy/src/proxy/service/statemachine"
+	state "mc_reverse_proxy/src/statemachine/dto"
+
+	proxyService "mc_reverse_proxy/src/proxy/service"
+
+	// state "mc_reverse_proxy/src/state/state"
 	"mc_reverse_proxy/src/utils"
 	"net"
 	"strings"
@@ -22,22 +29,23 @@ import (
 
 type NetworkStateMachine struct {
 	// errorMetric     metric.ErrorMetric
-	playerMetric metric.PlayerMetric
+	playerMetric metricDTO.PlayerMetric
 	// proxyMetric  metric.ProxyMetric
-	logPusher metric.LogPusher
-	Conn      *service.Connection
+	logPusher metricService.LogPusher
+	Conn      *networkService.ConnectionService
 	hostname  string
 	// playername      string
 	Data            *pac.Handshake
 	StateChangeLock sync.Mutex
 	ClientConnected chan bool
-	AStateMachine
+	serverRepo      proxyService.ServerRepositoryService
+	StateMachine
 	// metric.Loggable
 }
 
-func (sm *NetworkStateMachine) Run() error {
-	return sm.AStateMachine.Run()
-}
+// func (sm *NetworkStateMachine) Run() error {
+// 	return sm.Run()
+// }
 
 func (sm *NetworkStateMachine) UUID() string {
 	return uuid.NewString()
@@ -51,21 +59,21 @@ func (sm *NetworkStateMachine) Serve() error {
 	return sm.Run()
 }
 
-func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[string]string, serverMetric *metric.ProxyMetric, metricCollector *metric.MetricCollecter) *NetworkStateMachine {
+func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.ServerRepositoryService, serverMetric *metricDTO.ProxyMetric, metricCollector *metricService.MetricService) *NetworkStateMachine {
 	ctx, cancle := context.WithCancelCause(context.Background())
 	sm := &NetworkStateMachine{
 		StateChangeLock: sync.Mutex{},
-		playerMetric:    metric.PlayerMetric{ErrorMetric: metric.ErrorMetric{}},
+		playerMetric:    metricDTO.PlayerMetric{ErrorMetric: metricDTO.ErrorMetric{}},
 		// proxyMetric:     metric.ProxyMetric{},
 		ClientConnected: make(chan bool, 1),
 	}
-	sm.Conn = service.NewConnection(&sm.StateChangeLock, ctx, cancle, listener)
-	sm.Conn.ServerList = serverlist
+	sm.Conn = networkService.NewConnectionService(&sm.StateChangeLock, ctx, cancle, listener)
 	// sm.playerMetric.NetworkMetric = &sm.Conn.NetworkMetric
+	sm.serverRepo = serverRepo
 	sm.Ctx = ctx
 	sm.Cancle = cancle
 
-	logPusher := &metric.LogPusher{Collector: *metricCollector}
+	logPusher := &metricService.LogPusher{Collector: *metricCollector}
 	hostname := &sm.hostname
 	Data := sm.Data
 	playerMetric := &sm.playerMetric
@@ -89,10 +97,10 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		if err != nil {
 			log.Printf(err.Error())
 			playerMetric.AcceptFailed += 1
-			logPusher.PushErrorMetric(metric.ErrorMetric{AcceptFailed: 1})
+			logPusher.PushErrorMetric(metricDTO.ErrorMetric{AcceptFailed: 1})
 			return err
 		}
-		logPusher.PushProxyMetric(metric.ProxyMetric{Connected: 1})
+		logPusher.PushProxyMetric(metricDTO.ProxyMetric{Connected: 1})
 		// log.Println("[Init state] got client")
 		s := strings.Split(sm.Conn.ClientAddress, ":")
 		sm.playerMetric.IP = s[0]
@@ -116,16 +124,16 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			if utils.IsHTTPMethod(strings.Split(string(rawData), " ")[0]) {
 				isHttp = true
 				playerMetric.PacketDeserializeFailed += 1
-				logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
+				logPusher.PushErrorMetric(metricDTO.ErrorMetric{PacketDeserializeFailed: 1})
 				return nil
 			}
 			err := hs.Decode(rawData)
 			if err != nil {
 				playerMetric.PacketDeserializeFailed += 1
 				if bytes.Equal(rawData[:2], []byte{0xfe, 0x01}) {
-					logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
+					logPusher.PushProxyMetric(metricDTO.ProxyMetric{PlayerGetStatus: 1})
 				}
-				logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
+				logPusher.PushErrorMetric(metricDTO.ErrorMetric{PacketDeserializeFailed: 1})
 				return err
 			}
 			*hostname = hs.Hostname
@@ -139,66 +147,62 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 			err := l.Decode(Data.Tail)
 			if err != nil {
 				playerMetric.PacketDeserializeFailed += 1
-				logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
+				logPusher.PushErrorMetric(metricDTO.ErrorMetric{PacketDeserializeFailed: 1})
 				return err
 			}
 			loginpayload = &l
 		}
 		if Data.NextState == 0x01 {
-			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
+			logPusher.PushProxyMetric(metricDTO.ProxyMetric{PlayerGetStatus: 1})
 		} else if Data.NextState == 0x02 {
-			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerLogin: 1})
+			logPusher.PushProxyMetric(metricDTO.ProxyMetric{PlayerLogin: 1})
 		}
-		if data, ok := sm.Conn.ServerList[*hostname]; ok {
-			log.Printf("%v", Data)
-			if target, ok := data["target"]; ok {
-				err := sm.Conn.ConnectServer(target)
-				if err != nil {
-					playerMetric.ServerConnectFailed += 1
-					logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
-					return err
-				}
-				err = sm.Conn.PreConditionCheck()
-				if err != nil {
-					log.Printf("[handshake state] Precondition failed %v", err)
-					playerMetric.ServerConnectFailed += 1
-					logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
-					return err
-				}
-				go sm.Conn.ListenServer()
-				hs_packet, err := Data.Encode()
-				if err != nil {
-					playerMetric.PacketDeserializeFailed += 1
-					logPusher.PushErrorMetric(metric.ErrorMetric{PacketDeserializeFailed: 1})
-					log.Printf("[handshake state] Encode handshale failed %v", err)
-					return err
-				}
-				StateChangeLock.Lock()
-				err = sm.Conn.WriteServer(hs_packet)
-				if err != nil {
-					log.Printf("[handshake state] Handshake packet send failed %v", err)
-					playerMetric.ServerConnectFailed += 1
-					logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
-					return err
-				}
-				if Data.Tail != nil {
-					err = sm.Conn.WriteServer(Data.Tail)
-					if err != nil {
-						log.Printf("[handshake state] additional packet send failed %v", err)
-						playerMetric.ServerConnectFailed += 1
-						logPusher.PushErrorMetric(metric.ErrorMetric{ServerConnectFailed: 1})
-						return err
-					}
-				}
-				StateChangeLock.Unlock()
-				return nil
+		if target, err := sm.serverRepo.Resolve(*hostname); err == nil {
+			err := sm.Conn.ConnectServer(target)
+			if err != nil {
+				playerMetric.ServerConnectFailed += 1
+				logPusher.PushErrorMetric(metricDTO.ErrorMetric{ServerConnectFailed: 1})
+				return err
 			}
-			logPusher.PushErrorMetric(metric.ErrorMetric{HostnameResolveFailed: 1})
-			return errors.New("[Handshake State] host config file malformed")
+			err = sm.Conn.PreConditionCheck()
+			if err != nil {
+				log.Printf("[handshake state] Precondition failed %v", err)
+				playerMetric.ServerConnectFailed += 1
+				logPusher.PushErrorMetric(metricDTO.ErrorMetric{ServerConnectFailed: 1})
+				return err
+			}
+			go sm.Conn.ListenServer()
+			hs_packet, err := Data.Encode()
+			if err != nil {
+				playerMetric.PacketDeserializeFailed += 1
+				logPusher.PushErrorMetric(metricDTO.ErrorMetric{PacketDeserializeFailed: 1})
+				log.Printf("[handshake state] Encode handshale failed %v", err)
+				return err
+			}
+			StateChangeLock.Lock()
+			err = sm.Conn.WriteServer(hs_packet)
+			if err != nil {
+				log.Printf("[handshake state] Handshake packet send failed %v", err)
+				playerMetric.ServerConnectFailed += 1
+				logPusher.PushErrorMetric(metricDTO.ErrorMetric{ServerConnectFailed: 1})
+				return err
+			}
+			if Data.Tail != nil {
+				err = sm.Conn.WriteServer(Data.Tail)
+				if err != nil {
+					log.Printf("[handshake state] additional packet send failed %v", err)
+					playerMetric.ServerConnectFailed += 1
+					logPusher.PushErrorMetric(metricDTO.ErrorMetric{ServerConnectFailed: 1})
+					return err
+				}
+			}
+			StateChangeLock.Unlock()
+			return nil
+		} else {
+			playerMetric.HostnameResolveFailed += 1
+			logPusher.PushErrorMetric(metricDTO.ErrorMetric{HostnameResolveFailed: 1})
+			return errors.New(fmt.Sprintf("[Handshake State] Can't resolve host %s. Error %v", *hostname, err))
 		}
-		playerMetric.HostnameResolveFailed += 1
-		logPusher.PushErrorMetric(metric.ErrorMetric{HostnameResolveFailed: 1})
-		return errors.New(fmt.Sprintf("[Handshake State] Host %s not found", *hostname))
 	}
 
 	var statusReqHandler state.Function = func(i state.IState) error {
@@ -275,7 +279,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		case <-sm.Conn.Ctx.Done():
 			if *isLoggedIn {
 				// sm.proxyMetric.PlayerPlaying--
-				logPusher.PushProxyMetric(metric.ProxyMetric{PlayerPlaying: -1})
+				logPusher.PushProxyMetric(metricDTO.ProxyMetric{PlayerPlaying: -1})
 			}
 			return errors.New("context Done")
 		}
@@ -285,7 +289,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverlist map[string]map[st
 		StateChangeLock.Lock()
 		defer StateChangeLock.Unlock()
 		if *isLoggedIn {
-			logPusher.PushProxyMetric(metric.ProxyMetric{PlayerPlaying: -1})
+			logPusher.PushProxyMetric(metricDTO.ProxyMetric{PlayerPlaying: -1})
 		}
 		sm.Conn.CloseConn()
 		// (*sm.Conn.ServerConn).Close()

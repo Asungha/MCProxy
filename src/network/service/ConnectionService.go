@@ -1,17 +1,17 @@
-package service
+package network
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"log"
-	metric "mc_reverse_proxy/src/metric"
+	metricDTO "mc_reverse_proxy/src/metric/dto"
 	utils "mc_reverse_proxy/src/utils"
 	"net"
 	"sync"
 )
 
-type Connection struct {
+type ConnectionService struct {
 	TargetHostname string
 	ClientAddress  string
 	ClientConn     *net.Conn
@@ -21,16 +21,16 @@ type Connection struct {
 	Ctx            context.Context
 	Cancle         context.CancelCauseFunc
 
-	ServerList      map[string]map[string]string
+	// ServerList      map[string]map[string]string
 	StateChangeLock *sync.Mutex
 	Listener        *net.Listener
 
-	NetworkMetric metric.NetworkMetric
+	NetworkMetric metricDTO.NetworkMetric
 
 	// ListenAddress string
 }
 
-func (c *Connection) WaitClientConnection() error {
+func (c *ConnectionService) WaitClientConnection() error {
 	if c.Listener == nil {
 		return errors.New("no listener available")
 	}
@@ -46,7 +46,7 @@ func (c *Connection) WaitClientConnection() error {
 	return nil
 }
 
-func (c *Connection) ConnectServer(host string) error {
+func (c *ConnectionService) ConnectServer(host string) error {
 	upstreamConn, err := net.Dial("tcp", host)
 	if err != nil {
 		log.Printf("Failed to connect to upstream server: %v", err)
@@ -58,7 +58,7 @@ func (c *Connection) ConnectServer(host string) error {
 	return nil
 }
 
-func (c *Connection) PreConditionCheck() error {
+func (c *ConnectionService) PreConditionCheck() error {
 	if c.ClientConn == nil {
 		return errors.New("client connection not established")
 	}
@@ -68,7 +68,7 @@ func (c *Connection) PreConditionCheck() error {
 	return nil
 }
 
-func (c *Connection) ListenClient() error {
+func (c *ConnectionService) ListenClient() error {
 	defer log.Println("[client listener controller] Thread exit")
 	// defer c.WaitGroup.Done()
 	errs := make(chan error)
@@ -130,7 +130,7 @@ func (c *Connection) ListenClient() error {
 	}
 }
 
-func (c *Connection) ListenServer() error {
+func (c *ConnectionService) ListenServer() error {
 	defer log.Println("[server listener controller] Thread exit")
 	errs := make(chan error)
 	// datas := make(chan []byte)
@@ -177,7 +177,7 @@ func (c *Connection) ListenServer() error {
 	}
 }
 
-func (c *Connection) WriteClient(input []byte) error {
+func (c *ConnectionService) WriteClient(input []byte) error {
 	// log.Printf("Writing to client: %s", input.String())
 	// data := input.Encode()
 	// log.Printf("[client writter Debug] Writing data to client: %x", input)
@@ -192,7 +192,7 @@ func (c *Connection) WriteClient(input []byte) error {
 	return nil
 }
 
-func (c *Connection) WriteServer(input []byte) error {
+func (c *ConnectionService) WriteServer(input []byte) error {
 	// log.Printf("Writing to upstream: %s", input.String())
 	// data := input.Encode()
 	// log.Printf("[server writter Debug]  Writing to server: %x", input)
@@ -207,21 +207,21 @@ func (c *Connection) WriteServer(input []byte) error {
 	return nil
 }
 
-func (c *Connection) CloseClientConn() error {
+func (c *ConnectionService) CloseClientConn() error {
 	if c.ClientConn != nil {
 		(*c.ClientConn).Close()
 	}
 	return nil
 }
 
-func (c *Connection) CloseServerConn() error {
+func (c *ConnectionService) CloseServerConn() error {
 	if c.ServerConn != nil {
 		(*c.ServerConn).Close()
 	}
 	return nil
 }
 
-func (c *Connection) CloseConn() error {
+func (c *ConnectionService) CloseConn() error {
 	// c.WaitGroup.Wait()
 	clientErr := c.CloseClientConn()
 	serverErr := c.CloseServerConn()
@@ -231,18 +231,17 @@ func (c *Connection) CloseConn() error {
 	return nil
 }
 
-func (c *Connection) Destroy() {
+func (c *ConnectionService) Destroy() {
 	c.CloseConn()
-	// runtime.GC()
 }
 
-func NewConnection(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) *Connection {
-	return &Connection{
+func NewConnectionService(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) *ConnectionService {
+	return &ConnectionService{
 		StateChangeLock: mutex,
 		Ctx:             ctx,
 		Cancle:          cancle,
 		Listener:        listener,
-		NetworkMetric:   metric.NetworkMetric{},
+		NetworkMetric:   metricDTO.NetworkMetric{},
 		ClientData:      make(chan []byte, 16),
 		ServerData:      make(chan []byte, 16),
 	}

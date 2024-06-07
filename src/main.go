@@ -6,6 +6,7 @@ import (
 	metricAdaptor "mc_reverse_proxy/src/metric/adaptor"
 	metricService "mc_reverse_proxy/src/metric/service"
 	proxyAdaptor "mc_reverse_proxy/src/proxy/adaptor"
+	webui "mc_reverse_proxy/src/webui"
 	"os"
 )
 
@@ -36,6 +37,11 @@ func main() {
 	if v, ok := config["prometheus_address"]; ok {
 		metricExporter := &metricAdaptor.PrometheusAdaptor{MetricCollecter: metricService, ListenAddress: v}
 		go metricExporter.Serve()
+	}
+
+	if v, ok := config["webui_address"]; ok {
+		webui := webui.NewWebUI(metricService, p.(*proxyAdaptor.MinecraftProxy).Repository)
+		go webui.Serve(v)
 	}
 
 	p.Serve()

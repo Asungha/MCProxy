@@ -11,6 +11,7 @@ import (
 )
 
 type UpdateServerRecord struct {
+	ID       int    `json:id`
 	Hostname string `json:hostname`
 	Address  string `json:address`
 }
@@ -29,7 +30,7 @@ func (c *ConsoleController) Config(router *gin.Engine) {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			}
 			for _, record := range list {
-				res = append(res, gin.H{"hostname": record.Hostname, "address": record.Address})
+				res = append(res, gin.H{"id": record.ID, "hostname": record.Hostname, "address": record.Address})
 			}
 			ctx.JSON(http.StatusOK, res)
 		})
@@ -40,7 +41,7 @@ func (c *ConsoleController) Config(router *gin.Engine) {
 				return
 			}
 			log.Printf("%v", req)
-			err := c.serverRepo.(proxyService.UpdatableRepositoryService).Upsert(req.Hostname, req.Address)
+			err := c.serverRepo.(proxyService.UpdatableRepositoryService).Upsert(req.ID, req.Hostname, req.Address)
 			if err != nil {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return

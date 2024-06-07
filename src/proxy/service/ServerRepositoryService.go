@@ -6,13 +6,14 @@ type ServerRepositoryService interface {
 }
 
 type UpdatableRepositoryService interface {
-	Upsert(hostname string, address string) error
+	Upsert(id int, hostname string, address string) error
 	Count() (int, error)
 	Destroy()
 	ServerRepositoryService
 }
 
 type ServerList struct {
+	ID       int
 	Hostname string
 	Address  string
 }

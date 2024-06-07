@@ -8,8 +8,8 @@ import (
 	"log"
 	metricDTO "mc_reverse_proxy/src/metric/dto"
 	metricService "mc_reverse_proxy/src/metric/service"
-	pac "mc_reverse_proxy/src/network/packet"
-	networkService "mc_reverse_proxy/src/network/service"
+	pac "mc_reverse_proxy/src/protocol/packet"
+	networkService "mc_reverse_proxy/src/protocol/service"
 
 	// statemachine "mc_reverse_proxy/src/proxy/service/statemachine"
 	state "mc_reverse_proxy/src/statemachine/dto"

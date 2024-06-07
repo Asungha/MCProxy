@@ -75,7 +75,8 @@ func (s *QLServerRepositoryService) Resolve(hostname string) (string, error) {
 	return "", errors.New("host " + hostname + " not found")
 }
 
-func (s *QLServerRepositoryService) Upsert(hostname string, address string) error {
+func (s *QLServerRepositoryService) Upsert(id int, hostname string, address string) error {
+	id += 1 // Database id start with 1 but array start with 0
 	log.Printf("[QL] Upsert: %s %s", hostname, address)
 	if hostname == "" || address == "" {
 		return errors.New("value can't be empty")
@@ -85,12 +86,30 @@ func (s *QLServerRepositoryService) Upsert(hostname string, address string) erro
 		return err
 	}
 	defer tx.Rollback()
-	_, err = tx.Exec("INSERT INTO server (server_hostname, server_address) VALUES ($1, $2)", hostname, address)
+
+	row := tx.QueryRow("SELECT count(*) as c FROM server WHERE id() == $1", id)
+	var recCount int
+	err = row.Scan(&recCount)
 	if err != nil {
+		log.Printf(err.Error())
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return err
+	if recCount == 0 {
+		_, err = tx.Exec("INSERT INTO server (server_hostname, server_address) VALUES ($1, $2)", hostname, address)
+		if err != nil {
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+	} else {
+		_, err = tx.Exec("UPDATE server SET server_hostname = $1, server_address = $2 WHERE id() == $3", hostname, address, id)
+		if err != nil {
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -100,7 +119,7 @@ func (s *QLServerRepositoryService) Destroy() {
 }
 
 func (s *QLServerRepositoryService) Count() (int, error) {
-	rows, err := s.db.Query("SELECT count(server_address) FROM server")
+	rows, err := s.db.Query("SELECT count(*) as c FROM server")
 	if err != nil {
 		return 0, err
 	}
@@ -117,20 +136,21 @@ func (s *QLServerRepositoryService) Count() (int, error) {
 }
 
 func (s *QLServerRepositoryService) List() ([]ServerList, error) {
-	rows, err := s.db.Query("SELECT server_hostname, server_address FROM server")
+	rows, err := s.db.Query("SELECT id()-1 as id, server_hostname, server_address FROM server ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	res := []ServerList{}
 	for rows.Next() {
+		var id int
 		var hostname string
 		var address string
-		err = rows.Scan(&hostname, &address)
+		err = rows.Scan(&id, &hostname, &address)
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, ServerList{Hostname: hostname, Address: address})
+		res = append(res, ServerList{ID: id, Hostname: hostname, Address: address})
 	}
 	return res, nil
 }

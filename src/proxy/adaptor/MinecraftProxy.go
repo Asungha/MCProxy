@@ -36,7 +36,7 @@ type MinecraftProxy struct {
 
 	init bool
 
-	repository proxyService.ServerRepositoryService
+	Repository proxyService.ServerRepositoryService
 
 	// logger *Logger.Logger
 }
@@ -62,7 +62,7 @@ func (p *MinecraftProxy) Serve() {
 		p.init = true
 	}
 	for {
-		statemachine := statemachine.NewNetworkStatemachine(p.Listener, p.repository, &p.ProxyMetric, p.MetricCollector)
+		statemachine := statemachine.NewNetworkStatemachine(p.Listener, p.Repository, &p.ProxyMetric, p.MetricCollector)
 		go statemachine.Run()
 		<-statemachine.ClientConnected
 
@@ -82,7 +82,12 @@ func NewProxy(listenAddr string, metricService *metricService.MetricService) (Ip
 		return nil, err
 	}
 	log.Printf("[Proxy] Accepting connection at %s", listenAddr)
-	proxy := &MinecraftProxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}, MetricCollector: metricService}
+	repo := proxyService.NewQLServerRepositoryService()
+	err = repo.Load()
+	if err != nil {
+		return nil, err
+	}
+	proxy := &MinecraftProxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}, MetricCollector: metricService, Repository: repo}
 	proxy.MetricCollector.Register(proxy)
 	return proxy, nil
 }

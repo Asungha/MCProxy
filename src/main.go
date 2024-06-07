@@ -1,31 +1,42 @@
 package main
 
 import (
-	"log"
-	proxy "mc_reverse_proxy/src/proxy"
+	"encoding/json"
+	"fmt"
+	metricAdaptor "mc_reverse_proxy/src/metric/adaptor"
+	metricService "mc_reverse_proxy/src/metric/service"
+	proxyAdaptor "mc_reverse_proxy/src/proxy/adaptor"
+	"os"
 )
 
+func ReadConfig() map[string]string {
+	config := map[string]string{}
+	config_file, err := os.Open("config.json")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to open config file: %v", err))
+	}
+	defer config_file.Close()
+
+	decoder := json.NewDecoder(config_file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to decode config file: %v", err))
+	}
+	return config
+}
+
 func main() {
-	p, err := proxy.NewProxy("25565")
-	// ticker := time.NewTicker(5 * time.Second)
-	// go func() {
-	// 	for {
-	// 		select {
-	// 		case <-ticker.C:
-	// 			m, err := p.GetMC().Collect()
-	// 			if err != nil {
-	// 				log.Printf("[MC] error: %v", err)
-	// 			}
-	// 			log.Printf("%s", m.GetMetric())
-	// 		}
-	// 	}
-	// }()
+	config := ReadConfig()
+	metricService := metricService.NewMetricService()
+	p, err := proxyAdaptor.NewProxy(config["listen_address"], metricService)
 	if err != nil {
 		panic(err.Error())
-	} else {
-		for {
-			log.Printf("[Proxy] Accept ready")
-			p.Serve()
-		}
 	}
+
+	if v, ok := config["prometheus_address"]; ok {
+		metricExporter := &metricAdaptor.PrometheusAdaptor{MetricCollecter: metricService, ListenAddress: v}
+		go metricExporter.Serve()
+	}
+
+	p.Serve()
 }

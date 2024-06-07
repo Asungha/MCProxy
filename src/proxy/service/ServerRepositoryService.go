@@ -7,6 +7,8 @@ type ServerRepositoryService interface {
 
 type UpdatableRepositoryService interface {
 	Upsert(id int, hostname string, address string) error
+	Insert(hostname string, address string) error
+	Delete(id int) error
 	Count() (int, error)
 	Destroy()
 	ServerRepositoryService

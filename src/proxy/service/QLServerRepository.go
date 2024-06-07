@@ -75,8 +75,48 @@ func (s *QLServerRepositoryService) Resolve(hostname string) (string, error) {
 	return "", errors.New("host " + hostname + " not found")
 }
 
+func (s *QLServerRepositoryService) Insert(hostname string, address string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("INSERT INTO server (server_hostname, server_address) VALUES ($1, $2)", hostname, address)
+	if err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *QLServerRepositoryService) Delete(id int) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	row := tx.QueryRow("SELECT count(*) as c FROM server WHERE id() == $1", id)
+	var recCount int
+	err = row.Scan(&recCount)
+	if err != nil {
+		log.Printf(err.Error())
+		return err
+	}
+	if recCount != 0 {
+		_, err = tx.Exec("DELETE FROM server WHERE id() == $1", id)
+		if err != nil {
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+		return nil
+	} else {
+		return errors.New("not found")
+	}
+}
+
 func (s *QLServerRepositoryService) Upsert(id int, hostname string, address string) error {
-	id += 1 // Database id start with 1 but array start with 0
 	log.Printf("[QL] Upsert: %s %s", hostname, address)
 	if hostname == "" || address == "" {
 		return errors.New("value can't be empty")
@@ -136,7 +176,7 @@ func (s *QLServerRepositoryService) Count() (int, error) {
 }
 
 func (s *QLServerRepositoryService) List() ([]ServerList, error) {
-	rows, err := s.db.Query("SELECT id()-1 as id, server_hostname, server_address FROM server ORDER BY id ASC")
+	rows, err := s.db.Query("SELECT id() as id, server_hostname, server_address FROM server ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}

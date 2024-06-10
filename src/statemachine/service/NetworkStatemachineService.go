@@ -28,18 +28,16 @@ import (
 )
 
 type NetworkStateMachine struct {
-	// errorMetric     metric.ErrorMetric
 	playerMetric metricDTO.PlayerMetric
-	// proxyMetric  metric.ProxyMetric
-	logPusher metricService.LogPusher
-	Conn      *networkService.ConnectionService
-	hostname  string
-	// playername      string
-	Data            *pac.Handshake
+	Conn         *networkService.ConnectionService
+	serverRepo   proxyService.ServerRepositoryService
+	Data         *pac.Handshake
+
+	StateMachine
+
+	hostname        string
 	StateChangeLock sync.Mutex
 	ClientConnected chan bool
-	serverRepo      proxyService.ServerRepositoryService
-	StateMachine
 	// metric.Loggable
 }
 
@@ -136,7 +134,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 				logPusher.PushErrorMetric(metricDTO.ErrorMetric{PacketDeserializeFailed: 1})
 				return err
 			}
-			*hostname = hs.Hostname
+			*hostname = hs.GetHostname()
 			Data = &hs
 		case <-sm.Conn.Ctx.Done():
 			return errors.New("Context Done")

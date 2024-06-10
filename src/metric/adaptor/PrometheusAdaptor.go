@@ -10,8 +10,8 @@ import (
 
 type PrometheusAdaptor struct {
 	MetricCollecter *service.MetricService
-	ListenAddress   string
-	MetricAdaptor
+
+	ListenAddress string
 }
 
 func (e *PrometheusAdaptor) handler(w http.ResponseWriter, r *http.Request) {

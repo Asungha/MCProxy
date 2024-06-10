@@ -12,22 +12,18 @@ import (
 )
 
 type ConnectionService struct {
-	TargetHostname string
-	ClientAddress  string
-	ClientConn     *net.Conn
-	ServerConn     *net.Conn
-	ClientData     chan []byte
-	ServerData     chan []byte
-	Ctx            context.Context
-	Cancle         context.CancelCauseFunc
-
-	// ServerList      map[string]map[string]string
-	StateChangeLock *sync.Mutex
-	Listener        *net.Listener
-
 	NetworkMetric metricDTO.NetworkMetric
 
-	// ListenAddress string
+	TargetHostname  string
+	ClientAddress   string
+	ClientConn      *net.Conn
+	ServerConn      *net.Conn
+	ClientData      chan []byte
+	ServerData      chan []byte
+	Ctx             context.Context
+	Cancle          context.CancelCauseFunc
+	StateChangeLock *sync.Mutex
+	Listener        *net.Listener
 }
 
 func (c *ConnectionService) WaitClientConnection() error {
@@ -79,7 +75,7 @@ func (c *ConnectionService) ListenClient() error {
 			buf := make([]byte, 1024)
 			// (*c.ClientConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ClientConn).Read(buf)
-			// log.Printf("[client listener Debug] Reading %d bytes from client: %x", n, buf[:n])
+			log.Printf("[client listener Debug] Reading %d bytes from client: %x", n, buf[:n])
 			if err != nil {
 				log.Printf("[client listener] Failed to read from client connection: %v", err)
 				c.Cancle(err)
@@ -140,7 +136,7 @@ func (c *ConnectionService) ListenServer() error {
 			buf := make([]byte, 12400)
 			// (*c.ServerConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ServerConn).Read(buf)
-			// log.Printf("[server listener Debug] Reading %d bytes from upstream: %x", n, buf[:n])
+			log.Printf("[server listener Debug] Reading %d bytes from upstream: %x", n, buf[:n])
 			if err != nil {
 				log.Printf("[server listener] Failed to read from upstream connection: %v", err)
 				c.Cancle(err)

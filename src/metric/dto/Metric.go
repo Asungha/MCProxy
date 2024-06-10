@@ -7,7 +7,8 @@ type Metric struct {
 	NetworkMetric
 	ErrorMetric
 	ProxyMetric
-	playerMetric map[string]PlayerMetric
+	playerMetric     map[string]PlayerMetric
+	GameServerMetric map[string]*GameServerMetric
 }
 
 func (m *Metric) GetMetric() string {
@@ -15,6 +16,9 @@ func (m *Metric) GetMetric() string {
 	d := (m.GetNetworkMetric() + m.GetErrorMetric() + m.GetSystemMetric() + m.GetProxyMetric())
 	for _, playerMetric := range m.playerMetric {
 		d += playerMetric.GetPlayerMetric()
+	}
+	for _, playerMetric := range m.GameServerMetric {
+		d += playerMetric.GetGameServerMetric()
 	}
 	d = strings.ReplaceAll(d, "\t", "")
 	d = strings.ReplaceAll(d, "\n\n", "\n")

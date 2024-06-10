@@ -8,13 +8,13 @@ import (
 )
 
 type Login struct {
+	PacketHeader
+
 	Name             string
 	UUID             []byte
 	SizeHeaderLength int
 	isOldProtocol    bool
 	isEmpty          bool
-	IPacket
-	PacketHeader
 }
 
 func (p Login) ImplPacketData() {}

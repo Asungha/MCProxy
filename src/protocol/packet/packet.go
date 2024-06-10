@@ -18,8 +18,9 @@ type PacketHeader struct {
 	ID     byte
 }
 type Packet struct {
-	Payload *bytes.Reader
 	PacketHeader
+
+	Payload *bytes.Reader
 }
 
 func (rp *Packet) Check() error {

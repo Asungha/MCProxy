@@ -8,8 +8,9 @@ import (
 )
 
 type LocalServerRepositoryService struct {
-	servers map[string]map[string]string
 	ListableRepositoryService
+
+	servers map[string]map[string]string
 }
 
 func (s *LocalServerRepositoryService) Load() error {

@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	// hex "mc_reverse_proxy/src/utils"
 	"encoding/binary"
@@ -15,23 +16,31 @@ const (
 )
 
 type Handshake struct {
+	PacketHeader
+
 	ProtocolVersion int
 	HostnameLength  int
-	Hostname        string
+	hostname        string
 	Port            int
 	NextState       byte
 	Type            int
-	// PlayerData      *Packet[*PlayerData]
-	// PlayerData []byte
-	Tail []byte
-	IPacket
-	PacketHeader
+	IsFML           bool
+	Tail            []byte
 }
 
 func (h Handshake) ImplPacketData() {}
 
+func (h *Handshake) GetHostname() string {
+	if strings.Contains(h.hostname, "FML") {
+		host := strings.Split(h.hostname, "FML")[0]
+		return host[:len(host)-1]
+	} else {
+		return h.hostname
+	}
+}
+
 func (h *Handshake) encode() ([]byte, error) {
-	hostname := []byte(h.Hostname)
+	hostname := []byte(h.hostname)
 	protocolVersion := make([]byte, binary.MaxVarintLen64)
 	n_pv := binary.PutUvarint(protocolVersion, uint64(h.ProtocolVersion))
 	hostname_length := make([]byte, binary.MaxVarintLen64)
@@ -45,7 +54,7 @@ func (h *Handshake) encode() ([]byte, error) {
 }
 
 func (h *Handshake) Encode() ([]byte, error) {
-	hostname := []byte(h.Hostname)
+	hostname := []byte(h.hostname)
 	protocolVersion := make([]byte, binary.MaxVarintLen64)
 	n_pv := binary.PutUvarint(protocolVersion, uint64(h.ProtocolVersion))
 	hostname_length := make([]byte, binary.MaxVarintLen64)
@@ -93,7 +102,11 @@ func (h *Handshake) Decode(data []byte) error {
 		return err
 	}
 
-	h.Hostname = string(hostname)
+	if strings.Contains(string(hostname), `\0FML\0`) {
+		h.IsFML = true
+	}
+
+	h.hostname = string(hostname)
 
 	port := make([]byte, 2)
 	_, err = packet.Payload.Read(port)
@@ -120,7 +133,7 @@ func (h *Handshake) Decode(data []byte) error {
 
 func (h *Handshake) String() string {
 	// log.Printf("Version: %d", h.ProtocolVersion)
-	return fmt.Sprintf("ProtocolVersion: %d, Hostname: %s, Port: %d, NextState: %d, Type: %d", h.ProtocolVersion, h.Hostname, h.Port, h.NextState, h.Type)
+	return fmt.Sprintf("ProtocolVersion: %d, Hostname: %s, Port: %d, NextState: %d, Type: %d", h.ProtocolVersion, h.hostname, h.Port, h.NextState, h.Type)
 }
 
 func (h *Handshake) Length() int {

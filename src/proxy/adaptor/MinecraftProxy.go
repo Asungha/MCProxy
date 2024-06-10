@@ -16,27 +16,20 @@ import (
 type Iproxy interface {
 	ImplProxy()
 	Serve()
-	// UseMetricExporter(string)
-	metricService.Loggable
 }
 
 type MinecraftProxy struct {
-	Listener *net.Listener
-
-	routerLock sync.Mutex
-
-	threadWaitGroup *sync.WaitGroup
-
 	MetricCollector *metricService.MetricService
-
-	ProxyMetric metricDTO.ProxyMetric
-	ErrorMetric metricDTO.ErrorMetric
-
-	metricExporter metricAdaptor.MetricAdaptor
-
-	init bool
+	ProxyMetric     metricDTO.ProxyMetric
+	ErrorMetric     metricDTO.ErrorMetric
+	metricExporter  metricAdaptor.MetricAdaptor
 
 	Repository proxyService.ServerRepositoryService
+
+	Listener        *net.Listener
+	routerLock      sync.Mutex
+	threadWaitGroup *sync.WaitGroup
+	init            bool
 
 	// logger *Logger.Logger
 }

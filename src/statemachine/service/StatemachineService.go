@@ -30,12 +30,12 @@ type IStateMachine interface {
 
 type StateMachine struct {
 	currectState statemachineDTO.IState
-	States       map[string]statemachineDTO.IState
-	Conditions   []Condition
-	Ctx          context.Context
-	Cancle       context.CancelCauseFunc
-	DeferFunc    statemachineDTO.DeferFunction
-	IStateMachine
+
+	States     map[string]statemachineDTO.IState
+	Conditions []Condition
+	Ctx        context.Context
+	Cancle     context.CancelCauseFunc
+	DeferFunc  statemachineDTO.DeferFunction
 }
 
 func (sm *StateMachine) RegisterState(stateName string, s statemachineDTO.IState) error {

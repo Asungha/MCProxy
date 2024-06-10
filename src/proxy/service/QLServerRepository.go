@@ -11,18 +11,18 @@ import (
 )
 
 type QLServerRepositoryService struct {
-	db    *sql.DB
+	db *sql.DB
+
 	newDB bool
-	ServerRepositoryService
 }
 
 func (s *QLServerRepositoryService) Load() error {
 	if s.newDB {
-		localRepo := NewLocalServerRepoService()
-		err := localRepo.Load()
-		if err != nil {
-			return err
-		}
+		// localRepo := NewLocalServerRepoService()
+		// err := localRepo.Load()
+		// if err != nil {
+		// 	return err
+		// }
 		sqlStmt := `
 		CREATE TABLE IF NOT EXISTS server (
 			server_hostname STRING,
@@ -37,18 +37,18 @@ func (s *QLServerRepositoryService) Load() error {
 		if err != nil {
 			return err
 		}
-		list, err := localRepo.(ListableRepositoryService).List()
-		if err != nil {
-			{
-				return err
-			}
-		}
-		for _, record := range list {
-			_, err := tx.Exec("INSERT INTO server (server_hostname, server_address) VALUES ($1, $2)", record.Hostname, record.Address)
-			if err != nil {
-				return err
-			}
-		}
+		// list, err := localRepo.(ListableRepositoryService).List()
+		// if err != nil {
+		// 	{
+		// 		return err
+		// 	}
+		// }
+		// for _, record := range list {
+		// 	_, err := tx.Exec("INSERT INTO server (server_hostname, server_address) VALUES ($1, $2)", record.Hostname, record.Address)
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// }
 		if err = tx.Commit(); err != nil {
 			return err
 		}
@@ -155,6 +155,7 @@ func (s *QLServerRepositoryService) Upsert(id int, hostname string, address stri
 }
 
 func (s *QLServerRepositoryService) Destroy() {
+	log.Printf("Disconnect from database")
 	s.db.Close()
 }
 

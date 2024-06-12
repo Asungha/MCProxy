@@ -103,15 +103,14 @@ func (c *MetricService) systemMetric() (metricDTO.SystemMetric, error) {
 
 		c.LastProxyCPUTime = proxyCPUTime
 		c.LastSystemTotalCPUTime = systemCPUTime
-		return metricDTO.SystemMetric{
-			ThreadCount:        uint(runtime.NumGoroutine()),
-			HeapMemoryUsed:     uint(mem.HeapAlloc),
-			HeapMemoryFree:     uint(mem.HeapIdle),
-			ProcessorCount:     *metricDTO.ProcessorCount,
-			ProxyCPUPercentage: percentageProxyCPU, // CPU used by proxy
-			// SystemCPUPercentage: percentageSystemCPU, // CPU used by the rest of the host system
-			CPUTime: cpuTimes.Total(),
-		}, nil
+		sm := metricDTO.NewSystemMetric()
+		sm.ThreadCount = uint(runtime.NumGoroutine())
+		sm.HeapMemoryUsed = uint(mem.HeapAlloc)
+		sm.HeapMemoryFree = uint(mem.HeapIdle)
+		sm.ProcessorCount = *metricDTO.ProcessorCount
+		sm.ProxyCPUPercentage = percentageProxyCPU // CPU used by proxy
+		sm.CPUTime = cpuTimes.Total()
+		return sm, nil
 	}
 	return metricDTO.SystemMetric{}, errors.New("Failed to get system metric")
 }

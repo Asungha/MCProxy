@@ -6,13 +6,13 @@ import (
 )
 
 type ErrorMetric struct {
-	AcceptFailed            uint
-	HandshakeFailed         uint
-	PacketDeserializeFailed uint
-	HostnameResolveFailed   uint
-	ServerConnectFailed     uint
+	AcceptFailed            uint `json:"accept_failed"`
+	HandshakeFailed         uint `json:"handshake_failed"`
+	PacketDeserializeFailed uint `json:"deserialization_failed"`
+	HostnameResolveFailed   uint `json:"hostname_reslove_failed"`
+	ServerConnectFailed     uint `json:"server_connect_failed"`
 
-	LogOverflow uint
+	LogOverflow uint `json:"log_overflowed"`
 }
 
 func (m *ErrorMetric) Sum(a ErrorMetric) {

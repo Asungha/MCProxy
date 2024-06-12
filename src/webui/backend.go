@@ -3,11 +3,13 @@ package webui
 import (
 	"github.com/gin-gonic/gin"
 
+	service "mc_reverse_proxy/src/control/service"
 	metricService "mc_reverse_proxy/src/metric/service"
 	proxyService "mc_reverse_proxy/src/proxy/service"
 	common "mc_reverse_proxy/src/webui/backend/common"
-	console "mc_reverse_proxy/src/webui/backend/console/controller"
+	control "mc_reverse_proxy/src/webui/backend/control/controller"
 	metric "mc_reverse_proxy/src/webui/backend/metric/controller"
+	serverlist "mc_reverse_proxy/src/webui/backend/serverlist/controller"
 )
 
 func CORSMiddleware() gin.HandlerFunc {
@@ -27,29 +29,31 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 type HTTPBackend struct {
-	metricController  common.HTTPController
-	consoleController common.HTTPController
-
-	address string
+	Controller []common.HTTPController
+	address    string
 }
 
 func (b *HTTPBackend) Config(engine *gin.Engine) {
-	engine.Use(CORSMiddleware())
-	b.metricController.Config(engine)
-	b.consoleController.Config(engine)
+	for _, c := range b.Controller {
+		c.Config(engine)
+	}
 }
 
 func (b *HTTPBackend) Serve() error {
 	engine := gin.Default()
+	engine.Use(CORSMiddleware())
 	b.Config(engine)
 	return engine.Run(b.address)
 }
 
-func NewHTTPBackend(address string, metricCollector *metricService.MetricService, serverRepo proxyService.ServerRepositoryService) *HTTPBackend {
+func NewHTTPBackend(address string, metricCollector *metricService.MetricService, serverRepo proxyService.ServerRepositoryService, eventService *service.EventService) *HTTPBackend {
 	b := &HTTPBackend{
-		metricController:  metric.NewMetricController(metricCollector),
-		consoleController: console.NewConsoleController(serverRepo),
-		address:           address,
+		Controller: []common.HTTPController{
+			metric.NewMetricController(metricCollector),
+			serverlist.NewServerlistController(serverRepo),
+			control.NewControlController(eventService),
+		},
+		address: address,
 	}
 	return b
 }

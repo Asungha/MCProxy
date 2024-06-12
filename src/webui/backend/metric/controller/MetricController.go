@@ -22,10 +22,7 @@ func (c *MetricController) Config(router *gin.Engine) {
 				ctx.JSON(http.StatusBadRequest, gin.H{"Error": err.Error()})
 				return
 			} else {
-				ctx.JSON(http.StatusOK, gin.H{
-					"cpu_percentage": metric.SystemMetric.ProxyCPUPercentage,
-					"heap_usage":     metric.SystemMetric.HeapMemoryUsed,
-				})
+				ctx.JSON(http.StatusOK, metric)
 			}
 		})
 	}

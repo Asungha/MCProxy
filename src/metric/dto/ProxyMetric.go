@@ -6,11 +6,11 @@ import (
 )
 
 type ProxyMetric struct {
-	PlayerGetStatus int
-	PlayerLogin     int
-	PlayerPlaying   int
-	Ping            int
-	Connected       int
+	PlayerGetStatus int `json:"get_status"`
+	PlayerLogin     int `json:"login"`
+	PlayerPlaying   int `json:"playing"`
+	Ping            int `json:"ping"`
+	Connected       int `json:"connected"`
 }
 
 func (m *ProxyMetric) GetProxyMetric() string {

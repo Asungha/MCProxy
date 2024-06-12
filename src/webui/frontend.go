@@ -15,7 +15,8 @@ import (
 var staticFiles embed.FS
 
 type HTTPFrontend struct {
-	address string
+	address         string
+	backendHostname string
 }
 
 func (f *HTTPFrontend) Config(engine *gin.Engine) {
@@ -26,7 +27,11 @@ func (f *HTTPFrontend) Config(engine *gin.Engine) {
 	engine.Use(CORSMiddleware())
 	engine.Use(func(ctx *gin.Context) {
 		oldPath := ctx.Request.URL.Path
-		if oldPath == "/" {
+		if oldPath == "/api.json" {
+			ctx.JSON(http.StatusOK, gin.H{"api_address": "localhost:" + strings.Split(f.backendHostname, ":")[1]})
+			ctx.Done()
+			return
+		} else if oldPath == "/" {
 			ctx.Next()
 			return
 		} else if frags := strings.Split(oldPath, "."); len(frags) == 1 {
@@ -37,6 +42,7 @@ func (f *HTTPFrontend) Config(engine *gin.Engine) {
 		ctx.Next()
 	})
 	engine.StaticFS("/", http.FS(serverRoot))
+
 }
 
 func (f *HTTPFrontend) Serve() error {
@@ -45,9 +51,10 @@ func (f *HTTPFrontend) Serve() error {
 	return engine.Run(f.address)
 }
 
-func NewHTTPFrontend(address string) *HTTPFrontend {
+func NewHTTPFrontend(address string, backendHostname string) *HTTPFrontend {
 	f := &HTTPFrontend{
-		address: address,
+		address:         address,
+		backendHostname: backendHostname,
 	}
 	return f
 }

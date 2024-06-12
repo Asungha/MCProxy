@@ -205,60 +205,6 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 
 	var statusReqHandler state.Function = func(i state.IState) error {
 		log.Printf("[Status request state] Enter")
-		// sm.proxyMetric.PlayerGetStatus++
-		// logPusher.PushProxyMetric(metric.ProxyMetric{PlayerGetStatus: 1})
-		// select {
-		// case sData := <-sm.Conn.ServerData:
-		// 	log.Printf("[Status request state] Status data: %x", sData)
-		// 	StateChangeLock.Lock()
-		// 	sm.Conn.WriteClient(sData)
-		// 	StateChangeLock.Unlock()
-		// 	return nil
-		// case <-sm.Conn.Ctx.Done():
-		// 	return errors.New("context Done")
-		// }
-		// p := pac.StatusData{}
-		// p.Description.Extra = append(p.Description.Extra, pac.StatusDesExtra{Text: sm.Conn.ClientAddress})
-		// p.Players.Max = 20
-		// p.Players.Online = int(serverMetric.PlayerPlaying)
-		// p.Version.Name = "1.20.4"
-		// p.Version.Protocol = 765
-		// p.Modinfo.ModList = []string{}
-		// p.Modinfo.Type = "FML"
-
-		// // packet := pac.Packet[*pac.Status]{Data: &pac.Status{}}
-		// packet := pac.Status{Json: p.JSONString()}
-		// // packet.Data.Json = p.JSONString()
-		// // buf := make([]byte, 1024)
-		// res, err := packet.Encode()
-		// if err != nil {
-		// 	log.Println(err)
-		// 	return err
-		// }
-		// StateChangeLock.Lock()
-		// // res, _ := hex.DecodeString("6800667b2276657273696f6e223a7b226e616d65223a22506170657220312e32302e34222c2270726f746f636f6c223a3736357d2c226465736372697074696f6e223a224c6162222c22706c6179657273223a7b226d6178223a32302c226f6e6c696e65223a307d7d")
-		// // log.Printf("[Status state] sending status res: %s", p.JSONString())
-		// sm.Conn.WriteClient(res)
-		// StateChangeLock.Unlock()
-		// // if bytes.Equal(Data.Data.Tail, []byte{0x01, 0x00}) {
-		// // 	log.Printf("[Status request state] Pong")
-		// // 	StateChangeLock.Lock()
-		// // 	sm.Conn.WriteClient([]byte{0x01, 0x00})
-		// // 	StateChangeLock.Unlock()
-		// // 	return nil
-		// // }
-		// var data []byte
-		// select {
-		// case <-time.After(3 * time.Second):
-		// 	log.Printf("[Status request state] ping timeout")
-		// 	return nil
-		// case d := <-sm.Conn.ClientData:
-		// 	log.Println(d)
-		// 	data = d
-		// }
-		// StateChangeLock.Lock()
-		// sm.Conn.WriteClient(data)
-		// StateChangeLock.Unlock()
 		return nil
 	}
 

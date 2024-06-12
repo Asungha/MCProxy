@@ -14,6 +14,7 @@ type GRPCControlCenter struct {
 	EventService *service.EventService
 
 	proto.UnimplementedMetricServiceServer
+	proto.UnimplementedCommandServiceServer
 
 	address string
 }
@@ -22,6 +23,7 @@ func (s *GRPCControlCenter) Serve() error {
 	server := grpc.NewServer()
 
 	proto.RegisterMetricServiceServer(server, s)
+	proto.RegisterCommandServiceServer(server, s)
 
 	lis, err := net.Listen("tcp", s.address)
 	if err != nil {
@@ -51,6 +53,23 @@ func (s *GRPCControlCenter) Metric(stream proto.MetricService_MetricServer) erro
 		}
 
 		s.EventService.Publish("metric", service.EventData{MetricData: req})
+	}
+}
+
+func (s *GRPCControlCenter) Command(req *proto.Placeholder, stream proto.CommandService_CommandServer) error {
+	channel := s.EventService.Subscribe("command")
+	for {
+		select {
+		case data := <-channel:
+			log.Printf("%v", data)
+			// switch data.CommandData.Command {
+			// case proto.CommandEnum_TIMESET:
+			// 	stream.Send(&proto.CommandData{Command: data.CommandData.Command, TimesetData: data.CommandData.TimesetData})
+			// }
+			if data.CommandData.TimesetData != nil {
+				stream.Send(&proto.CommandData{Command: data.CommandData.Command, TimesetData: data.CommandData.TimesetData})
+			}
+		}
 	}
 }
 

@@ -25,11 +25,11 @@ type DeleteServerRecord struct {
 	ID int `json:id`
 }
 
-type ConsoleController struct {
+type ServerlistController struct {
 	serverRepo proxyService.ServerRepositoryService
 }
 
-func (c *ConsoleController) Config(router *gin.Engine) {
+func (c *ServerlistController) Config(router *gin.Engine) {
 	r := router.Group("/console")
 	{
 		r.GET("/server-list", func(ctx *gin.Context) {
@@ -88,6 +88,6 @@ func (c *ConsoleController) Config(router *gin.Engine) {
 	}
 }
 
-func NewConsoleController(serverRepo proxyService.ServerRepositoryService) *ConsoleController {
-	return &ConsoleController{serverRepo: serverRepo}
+func NewServerlistController(serverRepo proxyService.ServerRepositoryService) *ServerlistController {
+	return &ServerlistController{serverRepo: serverRepo}
 }

@@ -1,8 +1,7 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
+	configService "mc_reverse_proxy/src/configuration/service"
 	controlAdaptor "mc_reverse_proxy/src/control/adaptor"
 	controlService "mc_reverse_proxy/src/control/service"
 	metricAdaptor "mc_reverse_proxy/src/metric/adaptor"
@@ -13,62 +12,39 @@ import (
 	"os"
 )
 
-func ReadConfig() map[string]string {
-	config := map[string]string{}
-	config_file, err := os.Open("config.json")
-	if err != nil {
-		panic(fmt.Sprintf("Failed to open config file: %v", err))
-	}
-	defer config_file.Close()
-
-	decoder := json.NewDecoder(config_file)
-	err = decoder.Decode(&config)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to decode config file: %v", err))
-	}
-	return config
-}
-
-func ConfigGRPCApi(eventService *controlService.EventService, address string) {
-
-}
-
 func main() {
 	os.Remove("./.cf0fd1a71be9dd15298c0c29bf1e6b13a4433b34") // for hot reload
-	config := ReadConfig()
+	config, err := configService.NewConfigurationService("config.json")
+	if err != nil {
+		panic(err)
+	}
 
 	event := controlService.NewEventService()
 	metricService := metricService.NewMetricService(event)
 
-	isBackendStarted := false
-
-	p, err := proxyAdaptor.NewProxy(config["listen_address"], metricService)
+	p, err := proxyAdaptor.NewProxy(config.ServerAddress, metricService)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	if grpcIaAddr, ok := config["grpc_metric_address"]; ok {
-		GRPCService := controlAdaptor.NewGRPCControlCenter(grpcIaAddr, event)
-		go GRPCService.Serve()
+	if config.GRPCAddress != "" {
+		GRPCServer := controlAdaptor.NewGRPCControlCenter(config.GRPCAddress, event)
+		go GRPCServer.Serve()
 	}
 
-	if v, ok := config["prometheus_address"]; ok {
-		metricExporter := &metricAdaptor.PrometheusAdaptor{MetricCollecter: metricService, ListenAddress: v}
+	if config.PrometheusAddress != "" {
+		metricExporter := &metricAdaptor.PrometheusAdaptor{MetricCollecter: metricService, ListenAddress: config.PrometheusAddress}
 		go metricExporter.Serve()
 	}
 
-	if ba, ok := config["http_api_address"]; ok {
-		backend := webui.NewHTTPBackend(ba, metricService, p.(*proxyAdaptor.MinecraftProxy).Repository)
-		go backend.Serve()
-		isBackendStarted = true
+	if config.HTTPApiAddress != "" {
+		httpBackend := webui.NewHTTPBackend(config.HTTPApiAddress, metricService, p.(*proxyAdaptor.MinecraftProxy).Repository, event)
+		go httpBackend.Serve()
 	}
 
-	if fa, ok := config["webui_address"]; ok {
-		if !isBackendStarted {
-			panic("Webui frontend required http api to work. Add config 'http_api_address' in the config.json with appropiated address.")
-		}
-		frontend := webui.NewHTTPFrontend(fa)
-		go frontend.Serve()
+	if config.WebuiAddress != "" {
+		httpFrontend := webui.NewHTTPFrontend(config.WebuiAddress, config.HTTPHostname)
+		go httpFrontend.Serve()
 	}
 
 	defer p.(*proxyAdaptor.MinecraftProxy).Repository.(proxyService.UpdatableRepositoryService).Destroy()

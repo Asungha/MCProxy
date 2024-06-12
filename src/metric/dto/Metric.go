@@ -3,12 +3,12 @@ package dto
 import "strings"
 
 type Metric struct {
-	SystemMetric
-	NetworkMetric
-	ErrorMetric
-	ProxyMetric
-	playerMetric     map[string]PlayerMetric
-	GameServerMetric map[string]*GameServerMetric
+	SystemMetric     `json:"system"`
+	NetworkMetric    `json:"newtork"`
+	ErrorMetric      `json:"exception"`
+	ProxyMetric      `json:"proxy"`
+	playerMetric     map[string]PlayerMetric      `json:"player"`
+	GameServerMetric map[string]*GameServerMetric `json:"server"`
 }
 
 func (m *Metric) GetMetric() string {

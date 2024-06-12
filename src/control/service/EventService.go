@@ -24,11 +24,13 @@ func (e *EventService) Subscribe(topic string) chan EventData {
 	if hasTopic := e.Subscriber.Contain(topic); hasTopic {
 		e.Subscriber.Modify(func(m map[string]*map[string]chan EventData) map[string]*map[string]chan EventData {
 			(*m[topic])[uid] = sub
+			log.Printf("Put new subscriber: %s", uid)
 			return m
 		})
 	} else {
 		e.Subscriber.Set(topic, &map[string]chan EventData{uid: sub})
 	}
+	log.Printf("Put new subscriber: %s", uid)
 	return sub
 }
 

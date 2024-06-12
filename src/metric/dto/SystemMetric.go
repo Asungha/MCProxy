@@ -11,14 +11,21 @@ var ProcessorCount *uint
 var starttime *time.Time
 
 type SystemMetric struct {
-	StartTime          time.Time
-	ProcessorCount     uint
-	ThreadCount        uint
-	ProxyCPUPercentage float64
-	// SystemCPUPercentage float64
-	CPUTime        float64
-	HeapMemoryUsed uint
-	HeapMemoryFree uint
+	StartTime          time.Time `json:"start_time"`
+	ProcessorCount     uint      `json:"processor_count"`
+	ThreadCount        uint      `json:"running_thread_count"`
+	ProxyCPUPercentage float64   `json:"proxy_cpu_percentage"`
+	CPUTime            float64   `json:"cpu_time"`
+	HeapMemoryUsed     uint      `json:"heap_used"`
+	HeapMemoryFree     uint      `json:"heap_free"`
+}
+
+func NewSystemMetric() SystemMetric {
+	if starttime == nil {
+		t := time.Now()
+		starttime = &t
+	}
+	return SystemMetric{StartTime: *starttime}
 }
 
 func (m *SystemMetric) GetSystemMetric() string {
@@ -40,15 +47,15 @@ func (m *SystemMetric) GetSystemMetric() string {
 }
 
 type NetworkMetric struct {
-	ClientPacketTx uint
-	ClientPacketRx uint
-	ServerPacketTx uint
-	ServerPacketRx uint
+	ClientPacketTx uint `json:"client_packet_tx"`
+	ClientPacketRx uint `json:"client_packet_rx"`
+	ServerPacketTx uint `json:"server_packet_tx"`
+	ServerPacketRx uint `json:"server_packet_rx"`
 
-	ClientDataTx uint
-	ClientDataRx uint
-	ServerDataTx uint
-	ServerDataRx uint
+	ClientDataTx uint `json:"client_data_tx"`
+	ClientDataRx uint `json:"client_data_rx"`
+	ServerDataTx uint `json:"server_data_tx"`
+	ServerDataRx uint `json:"server_data_rx"`
 }
 
 func (m *NetworkMetric) Sum(a NetworkMetric) {

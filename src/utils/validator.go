@@ -84,7 +84,7 @@ func ValidateDataframe(buffer []byte) error {
 		// }
 
 		// Process the dataframe (length, id, payload)
-		fmt.Printf("Dataframe - Length: %d Payload: %x\n", length, buf)
+		// fmt.Printf("Dataframe - Length: %d Payload: %x\n", length, buf)
 	}
 
 	return nil

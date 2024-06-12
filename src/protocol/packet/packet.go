@@ -30,6 +30,7 @@ func (rp *Packet) Check() error {
 	if int(rp.Length) > 1+rp.Payload.Len() {
 		buf := make([]byte, rp.Payload.Len())
 		_, err := rp.Payload.Read(buf)
+		rp.Payload.Reset(buf)
 		if err != nil {
 			return err
 		}
@@ -38,6 +39,7 @@ func (rp *Packet) Check() error {
 	if rp.Payload.Len() > 256 {
 		buf := make([]byte, rp.Payload.Len())
 		_, err := rp.Payload.Read(buf)
+		rp.Payload.Reset(buf)
 		if err != nil {
 			return err
 		}
@@ -47,6 +49,9 @@ func (rp *Packet) Check() error {
 }
 
 func Serialize(packet Packet) []byte {
+	if packet.Payload == nil {
+		return []byte{}
+	}
 	data := packet.Payload
 	id := make([]byte, 1)
 	idn := binary.PutVarint(id, int64(packet.ID))
@@ -54,12 +59,15 @@ func Serialize(packet Packet) []byte {
 	data.Read(buf)
 	encoded := append(id[:idn], buf...)
 	length := make([]byte, binary.MaxVarintLen64)
-	sn := binary.PutUvarint(length, uint64(packet.Length+uint64(idn)))
+	sn := binary.PutUvarint(length, uint64(packet.Length))
 	return append(length[:sn], encoded...)
 }
 
 func Deserialize(data []byte) (Packet, RemainingData, error) {
 	trueLength := len(data)
+	if trueLength == 0 {
+		return Packet{}, []byte{}, errors.New("empty data")
+	}
 	length, n_length := binary.Uvarint(data)
 	// if n_length+1 >= trueLength || length >= uint64(trueLength) {
 	// 	return Packet{}, data, errors.New("invalid data length")

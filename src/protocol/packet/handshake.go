@@ -39,7 +39,7 @@ func (h *Handshake) GetHostname() string {
 	}
 }
 
-func (h *Handshake) encode() ([]byte, error) {
+func (h *Handshake) encode() []byte {
 	hostname := []byte(h.hostname)
 	protocolVersion := make([]byte, binary.MaxVarintLen64)
 	n_pv := binary.PutUvarint(protocolVersion, uint64(h.ProtocolVersion))
@@ -50,7 +50,7 @@ func (h *Handshake) encode() ([]byte, error) {
 	port := make([]byte, 2)
 	binary.BigEndian.PutUint16(port, uint16(h.Port))
 	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
-	return raw, nil
+	return raw
 }
 
 func (h *Handshake) Encode() ([]byte, error) {
@@ -62,7 +62,7 @@ func (h *Handshake) Encode() ([]byte, error) {
 	port := make([]byte, 2)
 	binary.BigEndian.PutUint16(port, uint16(h.Port))
 	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
-	packet := Packet{PacketHeader: PacketHeader{Length: uint64(len(raw)), ID: 0x00}, Payload: bytes.NewReader(raw)}
+	packet := Packet{PacketHeader: h.PacketHeader, Payload: bytes.NewReader(raw)}
 	if err := packet.Check(); err != nil {
 		return []byte{}, err
 	}
@@ -137,10 +137,7 @@ func (h *Handshake) String() string {
 }
 
 func (h *Handshake) Length() int {
-	data, err := h.encode()
-	if err != nil {
-		return -1
-	}
+	data := h.encode()
 	return len(data) - 1
 }
 

@@ -28,7 +28,7 @@ func (f *HTTPFrontend) Config(engine *gin.Engine) {
 	engine.Use(func(ctx *gin.Context) {
 		oldPath := ctx.Request.URL.Path
 		if oldPath == "/api.json" {
-			ctx.JSON(http.StatusOK, gin.H{"api_address": "localhost:" + strings.Split(f.backendHostname, ":")[1]})
+			ctx.JSON(http.StatusOK, gin.H{"api_address": f.backendHostname})
 			ctx.Done()
 			return
 		} else if oldPath == "/" {

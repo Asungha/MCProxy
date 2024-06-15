@@ -2,7 +2,7 @@ package service
 
 import "sync"
 
-type ThreadSafeMap[V any] struct {
+type ThreadSafeMap[V interface{}] struct {
 	mutex *sync.Mutex
 	data  map[string]V
 }
@@ -40,7 +40,7 @@ func (m *ThreadSafeMap[V]) Contain(key string) bool {
 	}
 }
 
-func NewThreadSafeMap[V any]() *ThreadSafeMap[V] {
+func NewThreadSafeMap[V interface{}]() *ThreadSafeMap[V] {
 	return &ThreadSafeMap[V]{
 		mutex: &sync.Mutex{},
 		data:  make(map[string]V),

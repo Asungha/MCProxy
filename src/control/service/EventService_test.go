@@ -47,9 +47,6 @@ func TestEventService_Subscribe(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// if got := tt.e.Subscribe(tt.args.topic); !reflect.DeepEqual(got, tt.want) {
-			// 	t.Errorf("EventService.Subscribe() = %v, want %v", got, tt.want)
-			// }
 			done := make(chan bool)
 			_, channel := tt.e.Subscribe(tt.args.topic)
 			go func() {

@@ -175,6 +175,12 @@ func TestHandshake_Decode(t *testing.T) {
 			args:    args{data: SAMPLE_STATUS_DATA_TAILLING},
 			wantErr: false,
 		},
+		{
+			name:    "Legacy status",
+			h:       *NewHandshake(),
+			args:    args{data: LEGACY_STATUS_REQ},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

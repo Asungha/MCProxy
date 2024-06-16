@@ -3,10 +3,18 @@ package utils
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 )
 
 func SplitDataframe(buffer []byte) ([][]byte, error) {
+	if len(buffer) == 0 {
+		return [][]byte{}, errors.New("empty data")
+	}
+	_, isOldProtocol := ValidateDataframe(buffer)
+	if isOldProtocol {
+		return [][]byte{buffer}, nil
+	}
 	reader := bytes.NewReader(buffer)
 	res := [][]byte{}
 	for reader.Len() > 0 {

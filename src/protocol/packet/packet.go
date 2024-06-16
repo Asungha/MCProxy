@@ -9,13 +9,14 @@ import (
 	"mc_reverse_proxy/src/utils"
 )
 
-var PINGHOST = [...]byte{0x00, 0x0b, 0x00, 0x4d, 0x00, 0x43, 0x00, 0x7c, 0x00, 0x50, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x67, 0x00, 0x48, 0x00, 0x6f, 0x00, 0x73, 0x00, 0x74}
+// var PINGHOST = [...]byte{0x00, 0x0b, 0x00, 0x4d, 0x00, 0x43, 0x00, 0x7c, 0x00, 0x50, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x67, 0x00, 0x48, 0x00, 0x6f, 0x00, 0x73, 0x00, 0x74}
 
 type RemainingData []byte
 
 type PacketHeader struct {
-	Length uint64
-	ID     byte
+	Length        uint64
+	ID            byte
+	IsOldProtocol bool
 }
 type Packet struct {
 	PacketHeader
@@ -48,9 +49,17 @@ func (rp *Packet) Check() error {
 	return nil
 }
 
-func Serialize(packet Packet) []byte {
+func Serialize(packet Packet) ([]byte, error) {
 	if packet.Payload == nil {
-		return []byte{}
+		return []byte{}, nil
+	}
+	if packet.IsOldProtocol {
+		data := make([]byte, packet.Payload.Size())
+		_, err := packet.Payload.Read(data)
+		if err != nil {
+			return []byte{}, err
+		}
+		return data, nil
 	}
 	data := packet.Payload
 	id := make([]byte, 1)
@@ -60,7 +69,7 @@ func Serialize(packet Packet) []byte {
 	encoded := append(id[:idn], buf...)
 	length := make([]byte, binary.MaxVarintLen64)
 	sn := binary.PutUvarint(length, uint64(packet.Length))
-	return append(length[:sn], encoded...)
+	return append(length[:sn], encoded...), nil
 }
 
 func Deserialize(data []byte) (Packet, RemainingData, error) {
@@ -68,22 +77,28 @@ func Deserialize(data []byte) (Packet, RemainingData, error) {
 	if trueLength == 0 {
 		return Packet{}, []byte{}, errors.New("empty data")
 	}
-	length, n_length := binary.Uvarint(data)
-	// if n_length+1 >= trueLength || length >= uint64(trueLength) {
-	// 	return Packet{}, data, errors.New("invalid data length")
-	// }
-	if err := utils.ValidateDataframe(data); err != nil {
-		log.Printf("[Packet deserializer] Error: %v", err)
+	err, isOldProtocol := utils.ValidateDataframe(data)
+	if err != nil {
+		log.Printf("[Packet deserializer] Validation Error: %v", err)
 		return Packet{}, []byte{}, err
 	}
-	id := data[n_length]
-	raw := Packet{PacketHeader: PacketHeader{ID: id, Length: length}, Payload: bytes.NewReader(data[n_length+1:])}
-	if err := raw.Check(); err != nil {
-		return Packet{}, []byte{}, err
-	}
-	if int(length)+n_length == trueLength {
+	if !isOldProtocol {
+		length, n_length := binary.Uvarint(data)
+		id := data[n_length]
+		raw := Packet{PacketHeader: PacketHeader{ID: id, Length: length}, Payload: bytes.NewReader(data[n_length+1:])}
+		if err := raw.Check(); err != nil {
+			return Packet{}, []byte{}, err
+		}
+		if int(length)+n_length == trueLength {
+			return raw, []byte{}, nil
+		}
+		remaining := data[length+1:]
+		return raw, remaining, nil
+	} else {
+		raw := Packet{PacketHeader: PacketHeader{ID: 0x00, IsOldProtocol: true, Length: 1}, Payload: bytes.NewReader(data)}
+		if err := raw.Check(); err != nil {
+			return Packet{}, []byte{}, err
+		}
 		return raw, []byte{}, nil
 	}
-	remaining := data[length+1:]
-	return raw, remaining, nil
 }

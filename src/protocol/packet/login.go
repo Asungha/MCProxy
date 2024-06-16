@@ -34,7 +34,11 @@ func (p *Login) Encode() ([]byte, error) {
 	if err := packet.Check(); err != nil {
 		return []byte{}, err
 	}
-	return Serialize(packet), nil
+	data, err := Serialize(packet)
+	if err != nil {
+		return []byte{}, err
+	}
+	return data, nil
 }
 
 func (p *Login) Decode(data []byte) error {

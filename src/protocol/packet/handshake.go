@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"strings"
 
 	// hex "mc_reverse_proxy/src/utils"
@@ -39,7 +40,7 @@ func (h *Handshake) GetHostname() string {
 	}
 }
 
-func (h *Handshake) encode() ([]byte, error) {
+func (h *Handshake) encode() []byte {
 	hostname := []byte(h.hostname)
 	protocolVersion := make([]byte, binary.MaxVarintLen64)
 	n_pv := binary.PutUvarint(protocolVersion, uint64(h.ProtocolVersion))
@@ -50,7 +51,7 @@ func (h *Handshake) encode() ([]byte, error) {
 	port := make([]byte, 2)
 	binary.BigEndian.PutUint16(port, uint16(h.Port))
 	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
-	return raw, nil
+	return raw
 }
 
 func (h *Handshake) Encode() ([]byte, error) {
@@ -62,17 +63,73 @@ func (h *Handshake) Encode() ([]byte, error) {
 	port := make([]byte, 2)
 	binary.BigEndian.PutUint16(port, uint16(h.Port))
 	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
-	packet := Packet{PacketHeader: PacketHeader{Length: uint64(len(raw)), ID: 0x00}, Payload: bytes.NewReader(raw)}
+	packet := Packet{PacketHeader: h.PacketHeader, Payload: bytes.NewReader(raw)}
 	if err := packet.Check(); err != nil {
 		return []byte{}, err
 	}
-	return Serialize(packet), nil
+	data, err := Serialize(packet)
+	if err != nil {
+		return []byte{}, err
+	}
+	return data, nil
 }
 
 func (h *Handshake) Decode(data []byte) error {
 	packet, remainingdate, err := Deserialize(data)
 	if err != nil {
 		return err
+	}
+	if packet.IsOldProtocol {
+		h.PacketHeader = packet.PacketHeader
+		reader := bytes.NewReader(data)
+		reader.Read(make([]byte, len(utils.PING_HOST)))
+
+		// length_b := make([]byte, 2)
+		_, err := reader.Read(make([]byte, 2))
+		if err != nil {
+			return err
+		}
+		// _ := binary.BigEndian.Uint64(length_b)
+
+		protocol_b := make([]byte, 1)
+		_, err = reader.Read(protocol_b[:])
+		if err != nil {
+			return err
+		}
+		protocol := int(protocol_b[0])
+
+		str_length_b := make([]byte, 2)
+		_, err = reader.Read(str_length_b[:])
+		if err != nil {
+			return err
+		}
+		str_length := int(str_length_b[1]) | int(str_length_b[0])<<8
+
+		hostname_b := make([]byte, str_length*2)
+		_, err = reader.Read(hostname_b[:])
+		if err != nil {
+			return err
+		}
+		hostname_utf8, err := utils.UTF16toUTF8(hostname_b)
+		log.Printf(">> %s", hostname_utf8)
+		if err != nil {
+			return err
+		}
+		hostname := fmt.Sprintf("%s", hostname_utf8)
+
+		port_b := make([]byte, 4)
+		_, err = reader.Read(hostname_b[:])
+		if err != nil {
+			return err
+		}
+		port := int(port_b[1]) | int(port_b[0])<<8
+
+		h.hostname = hostname
+		h.Port = int(port)
+		h.ProtocolVersion = int(protocol)
+		h.HostnameLength = int(str_length)
+		h.NextState = 0x01
+		return nil
 	}
 	h.PacketHeader = packet.PacketHeader
 	// n := int(packet.Length)
@@ -137,10 +194,7 @@ func (h *Handshake) String() string {
 }
 
 func (h *Handshake) Length() int {
-	data, err := h.encode()
-	if err != nil {
-		return -1
-	}
+	data := h.encode()
 	return len(data) - 1
 }
 

@@ -19,7 +19,7 @@ func main() {
 		panic(err)
 	}
 
-	event := controlService.NewEventService()
+	event := controlService.NewEventService(8)
 	metricService := metricService.NewMetricService(event)
 
 	p, err := proxyAdaptor.NewProxy(config.ServerAddress, metricService)

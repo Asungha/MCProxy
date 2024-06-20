@@ -203,6 +203,7 @@ func NewMetricService(eventService *controlService.EventService) *MetricService 
 		// log.Printf("[Metric] Error getting cpu utilization: %v", errCpu)
 		cputime = overallCPUTimes[0].Total()
 	}
+	_, metricChannel := eventService.Subscribe("metric")
 	mc := &MetricService{
 		LogEntities:            make(map[string]Loggable),
 		mutex:                  &sync.Mutex{},
@@ -211,7 +212,7 @@ func NewMetricService(eventService *controlService.EventService) *MetricService 
 		PushChannel:            make(chan metricDTO.Log, 16),
 		PushBuffer:             make([]*metricDTO.Log, 80960),
 		pushMutex:              &sync.Mutex{},
-		metricChannel:          eventService.Subscribe("metric"),
+		metricChannel:          metricChannel,
 		lastMetric:             metricDTO.Metric{GameServerMetric: make(map[string]*metricDTO.GameServerMetric)},
 	}
 	go mc.readPushedLog()

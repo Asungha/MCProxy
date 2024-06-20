@@ -57,15 +57,11 @@ func (s *GRPCControlCenter) Metric(stream proto.MetricService_MetricServer) erro
 }
 
 func (s *GRPCControlCenter) Command(req *proto.Placeholder, stream proto.CommandService_CommandServer) error {
-	channel := s.EventService.Subscribe("command")
+	_, channel := s.EventService.Subscribe("command")
 	for {
 		select {
 		case data := <-channel:
 			log.Printf("%v", data)
-			// switch data.CommandData.Command {
-			// case proto.CommandEnum_TIMESET:
-			// 	stream.Send(&proto.CommandData{Command: data.CommandData.Command, TimesetData: data.CommandData.TimesetData})
-			// }
 			if data.CommandData.TimesetData != nil {
 				stream.Send(&proto.CommandData{Command: data.CommandData.Command, TimesetData: data.CommandData.TimesetData})
 			}

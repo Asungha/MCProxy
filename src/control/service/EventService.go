@@ -16,10 +16,11 @@ type EventData struct {
 
 type EventService struct {
 	Subscriber *ThreadSafeMap[*map[string]chan EventData]
+	buffer     int
 }
 
-func (e *EventService) Subscribe(topic string) chan EventData {
-	sub := make(chan EventData, 8)
+func (e *EventService) Subscribe(topic string) (string, chan EventData) {
+	sub := make(chan EventData, e.buffer)
 	uid := uuid.New().String()
 	if hasTopic := e.Subscriber.Contain(topic); hasTopic {
 		e.Subscriber.Modify(func(m map[string]*map[string]chan EventData) map[string]*map[string]chan EventData {
@@ -31,7 +32,7 @@ func (e *EventService) Subscribe(topic string) chan EventData {
 		e.Subscriber.Set(topic, &map[string]chan EventData{uid: sub})
 	}
 	log.Printf("Put new subscriber: %s", uid)
-	return sub
+	return uid, sub
 }
 
 func (e *EventService) Unsubscribe(uid string, topic string) {
@@ -58,8 +59,9 @@ func (e *EventService) Publish(topic string, data EventData) {
 	}
 }
 
-func NewEventService() *EventService {
+func NewEventService(buffer int) *EventService {
 	return &EventService{
 		Subscriber: NewThreadSafeMap[*map[string]chan EventData](),
+		buffer:     buffer,
 	}
 }

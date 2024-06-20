@@ -31,8 +31,16 @@ func (s *ConfigurationService) ReadConfig(path string) error {
 		return fmt.Errorf("failed to decode config file: %v", err)
 	}
 
+	return s.validate()
+}
+
+func (s *ConfigurationService) validate() error {
 	if err := validator.Validate(*s); err != nil {
 		return err
+	}
+
+	if s.ServerAddress == "" {
+		return errors.New("server address no provided")
 	}
 
 	if s.WebuiAddress != "" && s.HTTPApiAddress == "" {
@@ -42,7 +50,6 @@ func (s *ConfigurationService) ReadConfig(path string) error {
 	if s.HTTPHostname == "" && s.HTTPApiAddress != "" {
 		s.HTTPHostname = s.HTTPApiAddress
 	}
-
 	return nil
 }
 

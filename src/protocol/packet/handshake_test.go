@@ -120,6 +120,12 @@ func TestHandshake_Encode(t *testing.T) {
 			want:    SAMPLE_STATUS_DATA_2,
 			wantErr: false,
 		},
+		{
+			name:    "Legacy status",
+			h:       *Get_LEGACY_STATUS_REQ_HANDSHAKE(),
+			want:    LEGACY_STATUS_REQ,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

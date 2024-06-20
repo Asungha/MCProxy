@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
-	"log"
 )
 
 type DescriptionBuilder struct {
@@ -155,7 +153,6 @@ func (h *OldStatusReq) Encode() ([]byte, error) {
 }
 
 func (h *OldStatusReq) Decode(data []byte, size int) error {
-	log.Printf("OldStatusReq: %x", data)
 	h.ID = data[0]
 	h.ID_pl = data[1]
 	h.Cmd_len = data[2:4]
@@ -163,7 +160,6 @@ func (h *OldStatusReq) Decode(data []byte, size int) error {
 	h.Payload_len = data[15:17]
 	h.ProtocolVersion = data[17]
 	h.Hostname_len = int(binary.BigEndian.Uint16(data[18:20]))
-	// log.Printf("Length: %d, Hostname_len: %x", len(data), h.Hostname_len)
 	h.Hostname = string(data[20 : 20+h.Hostname_len])
 	h.Port = int(data[20+h.Hostname_len])<<24 | int(data[21+h.Hostname_len])<<16 | int(data[22+h.Hostname_len])<<8 | int(data[23+h.Hostname_len])
 	return nil

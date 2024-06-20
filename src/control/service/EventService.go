@@ -25,13 +25,11 @@ func (e *EventService) Subscribe(topic string) (string, chan EventData) {
 	if hasTopic := e.Subscriber.Contain(topic); hasTopic {
 		e.Subscriber.Modify(func(m map[string]*map[string]chan EventData) map[string]*map[string]chan EventData {
 			(*m[topic])[uid] = sub
-			log.Printf("Put new subscriber: %s", uid)
 			return m
 		})
 	} else {
 		e.Subscriber.Set(topic, &map[string]chan EventData{uid: sub})
 	}
-	log.Printf("Put new subscriber: %s", uid)
 	return uid, sub
 }
 
@@ -50,7 +48,6 @@ func (e *EventService) Publish(topic string, data EventData) {
 		e.Subscriber.Set(topic, &map[string]chan EventData{})
 	}
 	for uid, channel := range *e.Subscriber.Get(topic) {
-		log.Printf("Sendding data to %s", uid)
 		select {
 		case <-time.After(10 * time.Millisecond):
 			log.Printf("[Event Service] Warning: sending data to %s timeout", uid)

@@ -3,7 +3,6 @@ package service
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 
@@ -99,7 +98,6 @@ func (s *QLServerRepositoryService) Delete(id int) error {
 	var recCount int
 	err = row.Scan(&recCount)
 	if err != nil {
-		log.Printf(err.Error())
 		return err
 	}
 	if recCount != 0 {
@@ -117,7 +115,6 @@ func (s *QLServerRepositoryService) Delete(id int) error {
 }
 
 func (s *QLServerRepositoryService) Upsert(id int, hostname string, address string) error {
-	log.Printf("[QL] Upsert: %s %s", hostname, address)
 	if hostname == "" || address == "" {
 		return errors.New("value can't be empty")
 	}
@@ -131,7 +128,6 @@ func (s *QLServerRepositoryService) Upsert(id int, hostname string, address stri
 	var recCount int
 	err = row.Scan(&recCount)
 	if err != nil {
-		log.Printf(err.Error())
 		return err
 	}
 	if recCount == 0 {
@@ -155,7 +151,6 @@ func (s *QLServerRepositoryService) Upsert(id int, hostname string, address stri
 }
 
 func (s *QLServerRepositoryService) Destroy() {
-	log.Printf("Disconnect from database")
 	s.db.Close()
 }
 
@@ -203,7 +198,6 @@ func NewQLServerRepositoryService() ServerRepositoryService {
 	// Check if the database file exists
 	isNew := false
 	if _, err := os.Stat(dbFileName); os.IsNotExist(err) {
-		fmt.Printf("Database file %s does not exist, creating...\n", dbFileName)
 		isNew = true
 	}
 	db, err := sql.Open("ql", dbFileName)

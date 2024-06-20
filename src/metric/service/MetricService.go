@@ -39,7 +39,6 @@ type MetricService struct {
 func (c *MetricService) readPushedLog() {
 	for {
 		log := <-c.PushChannel
-		// fmt.Println("Got log")s
 		c.pushMutex.Lock()
 		if len(c.PushBuffer) >= 80960 {
 			c.PushBuffer = c.PushBuffer[1:]
@@ -52,7 +51,6 @@ func (c *MetricService) readPushedLog() {
 func (c *MetricService) readLogEvent() {
 	for {
 		log := <-c.metricChannel
-		// fmt.Println("Got log")s
 		c.pushMutex.Lock()
 		if len(c.PushBuffer) >= 80960 {
 			c.PushBuffer = c.PushBuffer[1:]
@@ -130,7 +128,6 @@ func (c *MetricService) Unregister(key string) {
 }
 
 func (c *MetricService) Collect() (metricDTO.Metric, error) {
-	// logs := make([]Log, 1024)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	sys, err := c.systemMetric()
@@ -138,32 +135,20 @@ func (c *MetricService) Collect() (metricDTO.Metric, error) {
 		return metricDTO.Metric{}, err
 	}
 	c.lastMetric.SystemMetric = sys
-	// c.lastMetric.playerMetric = map[string]metric.PlayerMetric{}
-	// if
 	for _, e := range c.LogEntities {
 		log := e.Log()
-		// if (ProxyMetric{}) != log.ProxyMetric {
-		// 	metric.ProxyMetric.Sum(log.ProxyMetric)
-		// }
 		c.lastMetric.ProxyMetric.Sum(log.ProxyMetric)
 		c.lastMetric.NetworkMetric.Sum(log.NetworkMetric)
 		c.lastMetric.ErrorMetric.Sum(log.ErrorMetric)
 		if log.GameServerMetric != nil {
 			c.lastMetric.GameServerMetric[log.GameServerMetric.ServerID] = log.GameServerMetric
 		}
-		// c.lastMetric.playerMetric[log.PlayerName+log.IP] = log.PlayerMetric
 	}
 	c.pushMutex.Lock()
-	// log.Printf("[Metric Collector] Reading %d logs", len(c.PushBuffer))
 	for _, log := range c.PushBuffer {
 		if log == nil {
 			continue
 		}
-		// fmt.Println(log)
-		// log := e.Log()
-		// if (ProxyMetric{}) != log.ProxyMetric {
-		// 	metric.ProxyMetric.Sum(log.ProxyMetric)
-		// }
 		c.lastMetric.ProxyMetric.Sum(log.ProxyMetric)
 		c.lastMetric.NetworkMetric.Sum(log.NetworkMetric)
 		c.lastMetric.ErrorMetric.Sum(log.ErrorMetric)
@@ -200,7 +185,6 @@ func NewMetricService(eventService *controlService.EventService) *MetricService 
 	cputime := 0.0
 	overallCPUTimes, errCpu := cpu.Times(false)
 	if errCpu == nil {
-		// log.Printf("[Metric] Error getting cpu utilization: %v", errCpu)
 		cputime = overallCPUTimes[0].Total()
 	}
 	_, metricChannel := eventService.Subscribe("metric")

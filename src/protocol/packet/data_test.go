@@ -131,3 +131,9 @@ func Get_LEGACY_STATUS_REQ_PACKET() Packet {
 	},
 		Payload: bytes.NewReader(LEGACY_STATUS_REQ)}
 }
+
+func Get_LEGACY_STATUS_REQ_HANDSHAKE() *Handshake {
+	h := NewHandshake()
+	h.Decode(LEGACY_STATUS_REQ)
+	return h
+}

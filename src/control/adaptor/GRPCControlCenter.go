@@ -42,7 +42,6 @@ func (s *GRPCControlCenter) Serve() error {
 func (s *GRPCControlCenter) Metric(stream proto.MetricService_MetricServer) error {
 	for {
 		req, err := stream.Recv()
-		log.Printf(req.ServerID)
 		if err == io.EOF {
 			// End of stream, send response
 			return stream.SendAndClose(&proto.Placeholder{})
@@ -61,7 +60,6 @@ func (s *GRPCControlCenter) Command(req *proto.Placeholder, stream proto.Command
 	for {
 		select {
 		case data := <-channel:
-			log.Printf("%v", data)
 			if data.CommandData.TimesetData != nil {
 				stream.Send(&proto.CommandData{Command: data.CommandData.Command, TimesetData: data.CommandData.TimesetData})
 			}

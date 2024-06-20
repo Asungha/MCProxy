@@ -3,7 +3,6 @@ package packet
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"strings"
 
 	// hex "mc_reverse_proxy/src/utils"
@@ -27,6 +26,7 @@ type Handshake struct {
 	Type            int
 	IsFML           bool
 	Tail            []byte
+	RawData         []byte
 }
 
 func (h Handshake) ImplPacketData() {}
@@ -62,7 +62,12 @@ func (h *Handshake) Encode() ([]byte, error) {
 	n_hl := binary.PutUvarint(hostname_length, uint64(len(hostname)))
 	port := make([]byte, 2)
 	binary.BigEndian.PutUint16(port, uint16(h.Port))
-	raw := utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
+	var raw []byte
+	if h.IsOldProtocol {
+		raw = h.RawData
+	} else {
+		raw = utils.Concat(protocolVersion[:n_pv], hostname_length[:n_hl], hostname, port, []byte{h.NextState})
+	}
 	packet := Packet{PacketHeader: h.PacketHeader, Payload: bytes.NewReader(raw)}
 	if err := packet.Check(); err != nil {
 		return []byte{}, err
@@ -111,7 +116,6 @@ func (h *Handshake) Decode(data []byte) error {
 			return err
 		}
 		hostname_utf8, err := utils.UTF16toUTF8(hostname_b)
-		log.Printf(">> %s", hostname_utf8)
 		if err != nil {
 			return err
 		}
@@ -129,6 +133,7 @@ func (h *Handshake) Decode(data []byte) error {
 		h.ProtocolVersion = int(protocol)
 		h.HostnameLength = int(str_length)
 		h.NextState = 0x01
+		h.RawData = data
 		return nil
 	}
 	h.PacketHeader = packet.PacketHeader
@@ -189,7 +194,6 @@ func (h *Handshake) Decode(data []byte) error {
 }
 
 func (h *Handshake) String() string {
-	// log.Printf("Version: %d", h.ProtocolVersion)
 	return fmt.Sprintf("ProtocolVersion: %d, Hostname: %s, Port: %d, NextState: %d, Type: %d", h.ProtocolVersion, h.hostname, h.Port, h.NextState, h.Type)
 }
 

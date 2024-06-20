@@ -14,12 +14,11 @@ type LocalServerRepositoryService struct {
 }
 
 func (s *LocalServerRepositoryService) Load() error {
-	log.Printf("loading -> %v", s.servers)
 	// s.servers = map[string]map[string]string{}
 	if s.servers == nil {
 		host_file, err := os.Open("host.json")
 		if err != nil {
-			log.Printf("Failed to open host config file: %v", err)
+			log.Printf("[Repository] Failed to open host config file: %v", err)
 			return err
 		}
 		defer host_file.Close()
@@ -28,7 +27,7 @@ func (s *LocalServerRepositoryService) Load() error {
 		decoder := json.NewDecoder(host_file)
 		err = decoder.Decode(&host)
 		if err != nil {
-			log.Printf("Failed to decode config file: %v", err)
+			log.Printf("[Repository] Failed to decode config file: %v", err)
 			return err
 		}
 
@@ -40,7 +39,6 @@ func (s *LocalServerRepositoryService) Load() error {
 		}
 		s.servers = backends
 	}
-	log.Printf("loading -> %v", s.servers)
 	return nil
 }
 

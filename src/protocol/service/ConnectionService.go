@@ -32,11 +32,10 @@ func (c *ConnectionService) WaitClientConnection() error {
 	}
 	clientConn, err := (*c.Listener).Accept()
 	if err != nil {
-		log.Printf("Failed to accept client connection: %v", err)
+		log.Printf("[Proxy] Failed to accept client connection: %v", err)
 		return err
 	}
 	log.Printf("[Proxy] Initiated connection between %s and %s", clientConn.RemoteAddr().String(), "localhost:25565")
-	// clientConn.SetDeadline(time.Now().Add(5 * time.Second))
 	c.ClientConn = &clientConn
 	c.ClientAddress = clientConn.RemoteAddr().String()
 	return nil
@@ -45,11 +44,10 @@ func (c *ConnectionService) WaitClientConnection() error {
 func (c *ConnectionService) ConnectServer(host string) error {
 	upstreamConn, err := net.Dial("tcp", host)
 	if err != nil {
-		log.Printf("Failed to connect to upstream server: %v", err)
+		log.Printf("[Proxy] Failed to connect to upstream server: %v", err)
 		return err
 	}
 	log.Printf("[Proxy] Initiated connection between %s and %s", "proxy", upstreamConn.RemoteAddr().String())
-	// upstreamConn.SetDeadline(time.Now().Add(5 * time.Second))
 	c.ServerConn = &upstreamConn
 	return nil
 }
@@ -65,17 +63,11 @@ func (c *ConnectionService) PreConditionCheck() error {
 }
 
 func (c *ConnectionService) ListenClient() error {
-	defer log.Println("[client listener controller] Thread exit")
-	// defer c.WaitGroup.Done()
 	errs := make(chan error)
-	// done := make(chan bool)
 	go func(errs chan error) {
-		defer log.Println("[client listener] Thread exit")
 		for {
 			buf := make([]byte, 1024)
-			// (*c.ClientConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ClientConn).Read(buf)
-			log.Printf("[client listener Debug] Reading %d bytes from client: %x", n, buf[:n])
 			if err != nil {
 				log.Printf("[client listener] Failed to read from client connection: %v", err)
 				c.Cancle(err)
@@ -89,11 +81,8 @@ func (c *ConnectionService) ListenClient() error {
 			c.NetworkMetric.ClientPacketRx += 1
 			c.NetworkMetric.ClientDataRx += uint(n)
 			data := buf[:n]
-			// c.StateChangeLock.Lock()
-			// log.Printf("Sending data")
 			fragments, err := utils.SplitDataframe(data)
 			if err != nil {
-				log.Printf(err.Error())
 				c.Cancle(err)
 				buf = nil
 				errs <- err
@@ -102,9 +91,6 @@ func (c *ConnectionService) ListenClient() error {
 			for _, f := range fragments {
 				c.ClientData <- f
 			}
-			// c.ClientData <- data
-			// log.Printf("Sending datato %v done", c.ClientData)
-			// c.StateChangeLock.Unlock()
 			buf = nil
 		}
 	}(errs)
@@ -127,16 +113,11 @@ func (c *ConnectionService) ListenClient() error {
 }
 
 func (c *ConnectionService) ListenServer() error {
-	defer log.Println("[server listener controller] Thread exit")
 	errs := make(chan error)
-	// datas := make(chan []byte)
 	go func(errs chan error) {
-		defer log.Println("[server listener] Thread exit")
 		for {
 			buf := make([]byte, 12400)
-			// (*c.ServerConn).SetReadDeadline(time.Now().Add(5 * time.Second))
 			n, err := (*c.ServerConn).Read(buf)
-			// log.Printf("[server listener Debug] Reading %d bytes from upstream: %x", n, buf[:n])
 			if err != nil {
 				log.Printf("[server listener] Failed to read from upstream connection: %v", err)
 				c.Cancle(err)
@@ -174,12 +155,8 @@ func (c *ConnectionService) ListenServer() error {
 }
 
 func (c *ConnectionService) WriteClient(input []byte) error {
-	// log.Printf("Writing to client: %s", input.String())
-	// data := input.Encode()
-	// log.Printf("[client writter Debug] Writing data to client: %x", input)
 	n, err := (*c.ClientConn).Write(input)
 	if err != nil {
-		// log.Printf("[] Failed to write to client connection: %v", err)
 		c.Cancle(err)
 		return err
 	}
@@ -189,12 +166,8 @@ func (c *ConnectionService) WriteClient(input []byte) error {
 }
 
 func (c *ConnectionService) WriteServer(input []byte) error {
-	// log.Printf("Writing to upstream: %s", input.String())
-	// data := input.Encode()
-	log.Printf("[server writter Debug]  Writing to server: %x", input)
 	n, err := (*c.ServerConn).Write(input)
 	if err != nil {
-		// log.Printf("Failed to write to upstream connection: %v", err)
 		c.Cancle(err)
 		return err
 	}

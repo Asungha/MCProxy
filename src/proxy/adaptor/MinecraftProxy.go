@@ -49,7 +49,6 @@ func (p *MinecraftProxy) Log() metricDTO.Log {
 func (p *MinecraftProxy) Serve() {
 	if p.metricExporter != nil && !p.init {
 		go func(p *MinecraftProxy) {
-			defer log.Println("[metricExporter] Thread exit")
 			p.metricExporter.Serve()
 		}(p)
 		p.init = true
@@ -60,11 +59,8 @@ func (p *MinecraftProxy) Serve() {
 		<-statemachine.ClientConnected
 
 		log.Printf("[Proxy] Connection between proxy and client established")
-		// uuid := p.MetricCollector.Register(statemachine)
 		go func(uuid string) {
 			<-statemachine.Ctx.Done()
-			log.Printf("[sm manager] cleanup")
-			// p.MetricCollector.Unregister(uuid)
 		}("")
 	}
 }

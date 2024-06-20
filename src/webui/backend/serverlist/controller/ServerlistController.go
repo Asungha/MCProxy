@@ -6,8 +6,6 @@ import (
 
 	proxyService "mc_reverse_proxy/src/proxy/service"
 
-	"log"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -55,7 +53,6 @@ func (c *ServerlistController) Config(router *gin.Engine) {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": errors.New("empty value").Error()})
 				return
 			}
-			log.Printf("%v", req)
 			err := c.serverRepo.(proxyService.UpdatableRepositoryService).Insert(req.Hostname, req.Address)
 			if err != nil {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -69,7 +66,6 @@ func (c *ServerlistController) Config(router *gin.Engine) {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-			log.Printf("%v", req)
 			err := c.serverRepo.(proxyService.UpdatableRepositoryService).Upsert(req.Id, req.Hostname, req.Address)
 			if err != nil {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -83,7 +79,6 @@ func (c *ServerlistController) Config(router *gin.Engine) {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 				return
 			}
-			log.Printf("%v", req)
 			err := c.serverRepo.(proxyService.UpdatableRepositoryService).Delete(req.Id)
 			if err != nil {
 				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

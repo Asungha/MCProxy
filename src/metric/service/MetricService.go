@@ -11,6 +11,7 @@ import (
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/process"
 
+	controlService "mc_reverse_proxy/src/control/service"
 	metricDTO "mc_reverse_proxy/src/metric/dto"
 )
 
@@ -20,29 +21,45 @@ type Loggable interface {
 }
 
 type MetricService struct {
+	metricChannel chan controlService.EventData
+
+	PushChannel chan metricDTO.Log
+	PushBuffer  []*metricDTO.Log
+	lastMetric  metricDTO.Metric
+
 	LogEntities            map[string]Loggable
 	mutex                  *sync.Mutex
 	LastProxyCPUTime       float64
 	LastSystemTotalCPUTime float64
-
-	PushChannel      chan metricDTO.Log
-	PushBuffer       []*metricDTO.Log
-	PushedLog        int
-	LogOverflowCount int
-	pushMutex        *sync.Mutex
-
-	lastMetric metricDTO.Metric
+	PushedLog              int
+	LogOverflowCount       int
+	pushMutex              *sync.Mutex
 }
 
 func (c *MetricService) readPushedLog() {
 	for {
 		log := <-c.PushChannel
-		// fmt.Println("Got log")s
 		c.pushMutex.Lock()
 		if len(c.PushBuffer) >= 80960 {
 			c.PushBuffer = c.PushBuffer[1:]
 		}
 		c.PushBuffer = append(c.PushBuffer, &log)
+		c.pushMutex.Unlock()
+	}
+}
+
+func (c *MetricService) readLogEvent() {
+	for {
+		log := <-c.metricChannel
+		c.pushMutex.Lock()
+		if len(c.PushBuffer) >= 80960 {
+			c.PushBuffer = c.PushBuffer[1:]
+		}
+		c.PushBuffer = append(c.PushBuffer, &metricDTO.Log{
+			GameServerMetric: &metricDTO.GameServerMetric{
+				MetricData: log.MetricData,
+			},
+		})
 		c.pushMutex.Unlock()
 	}
 }
@@ -84,15 +101,14 @@ func (c *MetricService) systemMetric() (metricDTO.SystemMetric, error) {
 
 		c.LastProxyCPUTime = proxyCPUTime
 		c.LastSystemTotalCPUTime = systemCPUTime
-		return metricDTO.SystemMetric{
-			ThreadCount:        uint(runtime.NumGoroutine()),
-			HeapMemoryUsed:     uint(mem.HeapAlloc),
-			HeapMemoryFree:     uint(mem.HeapIdle),
-			ProcessorCount:     *metricDTO.ProcessorCount,
-			ProxyCPUPercentage: percentageProxyCPU, // CPU used by proxy
-			// SystemCPUPercentage: percentageSystemCPU, // CPU used by the rest of the host system
-			CPUTime: cpuTimes.Total(),
-		}, nil
+		sm := metricDTO.NewSystemMetric()
+		sm.ThreadCount = uint(runtime.NumGoroutine())
+		sm.HeapMemoryUsed = uint(mem.HeapAlloc)
+		sm.HeapMemoryFree = uint(mem.HeapIdle)
+		sm.ProcessorCount = *metricDTO.ProcessorCount
+		sm.ProxyCPUPercentage = percentageProxyCPU // CPU used by proxy
+		sm.CPUTime = cpuTimes.Total()
+		return sm, nil
 	}
 	return metricDTO.SystemMetric{}, errors.New("Failed to get system metric")
 }
@@ -112,7 +128,6 @@ func (c *MetricService) Unregister(key string) {
 }
 
 func (c *MetricService) Collect() (metricDTO.Metric, error) {
-	// logs := make([]Log, 1024)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	sys, err := c.systemMetric()
@@ -120,33 +135,26 @@ func (c *MetricService) Collect() (metricDTO.Metric, error) {
 		return metricDTO.Metric{}, err
 	}
 	c.lastMetric.SystemMetric = sys
-	// c.lastMetric.playerMetric = map[string]metric.PlayerMetric{}
-	// if
 	for _, e := range c.LogEntities {
 		log := e.Log()
-		// if (ProxyMetric{}) != log.ProxyMetric {
-		// 	metric.ProxyMetric.Sum(log.ProxyMetric)
-		// }
 		c.lastMetric.ProxyMetric.Sum(log.ProxyMetric)
 		c.lastMetric.NetworkMetric.Sum(log.NetworkMetric)
 		c.lastMetric.ErrorMetric.Sum(log.ErrorMetric)
-		// c.lastMetric.playerMetric[log.PlayerName+log.IP] = log.PlayerMetric
+		if log.GameServerMetric != nil {
+			c.lastMetric.GameServerMetric[log.GameServerMetric.ServerID] = log.GameServerMetric
+		}
 	}
 	c.pushMutex.Lock()
-	// log.Printf("[Metric Collector] Reading %d logs", len(c.PushBuffer))
 	for _, log := range c.PushBuffer {
 		if log == nil {
 			continue
 		}
-		// fmt.Println(log)
-		// log := e.Log()
-		// if (ProxyMetric{}) != log.ProxyMetric {
-		// 	metric.ProxyMetric.Sum(log.ProxyMetric)
-		// }
 		c.lastMetric.ProxyMetric.Sum(log.ProxyMetric)
 		c.lastMetric.NetworkMetric.Sum(log.NetworkMetric)
 		c.lastMetric.ErrorMetric.Sum(log.ErrorMetric)
-		// c.lastMetric.playerMetric[log.PlayerName+log.IP] = log.PlayerMetric
+		if log.GameServerMetric != nil {
+			c.lastMetric.GameServerMetric[log.GameServerMetric.ServerID] = log.GameServerMetric
+		}
 	}
 	c.PushBuffer = []*metricDTO.Log{}
 	c.pushMutex.Unlock()
@@ -173,13 +181,13 @@ func (c *MetricService) PushLog(log metricDTO.Log) error {
 	return nil
 }
 
-func NewMetricService() *MetricService {
+func NewMetricService(eventService *controlService.EventService) *MetricService {
 	cputime := 0.0
 	overallCPUTimes, errCpu := cpu.Times(false)
 	if errCpu == nil {
-		// log.Printf("[Metric] Error getting cpu utilization: %v", errCpu)
 		cputime = overallCPUTimes[0].Total()
 	}
+	_, metricChannel := eventService.Subscribe("metric")
 	mc := &MetricService{
 		LogEntities:            make(map[string]Loggable),
 		mutex:                  &sync.Mutex{},
@@ -188,7 +196,10 @@ func NewMetricService() *MetricService {
 		PushChannel:            make(chan metricDTO.Log, 16),
 		PushBuffer:             make([]*metricDTO.Log, 80960),
 		pushMutex:              &sync.Mutex{},
+		metricChannel:          metricChannel,
+		lastMetric:             metricDTO.Metric{GameServerMetric: make(map[string]*metricDTO.GameServerMetric)},
 	}
 	go mc.readPushedLog()
+	go mc.readLogEvent()
 	return mc
 }

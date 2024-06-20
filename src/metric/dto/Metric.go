@@ -3,11 +3,12 @@ package dto
 import "strings"
 
 type Metric struct {
-	SystemMetric
-	NetworkMetric
-	ErrorMetric
-	ProxyMetric
-	playerMetric map[string]PlayerMetric
+	SystemMetric     `json:"system"`
+	NetworkMetric    `json:"newtork"`
+	ErrorMetric      `json:"exception"`
+	ProxyMetric      `json:"proxy"`
+	playerMetric     map[string]PlayerMetric      `json:"player"`
+	GameServerMetric map[string]*GameServerMetric `json:"server"`
 }
 
 func (m *Metric) GetMetric() string {
@@ -15,6 +16,9 @@ func (m *Metric) GetMetric() string {
 	d := (m.GetNetworkMetric() + m.GetErrorMetric() + m.GetSystemMetric() + m.GetProxyMetric())
 	for _, playerMetric := range m.playerMetric {
 		d += playerMetric.GetPlayerMetric()
+	}
+	for _, playerMetric := range m.GameServerMetric {
+		d += playerMetric.GetGameServerMetric()
 	}
 	d = strings.ReplaceAll(d, "\t", "")
 	d = strings.ReplaceAll(d, "\n\n", "\n")

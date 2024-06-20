@@ -32,9 +32,11 @@ RUN chmod -R g=u /mc_reverse_proxy
 COPY --from=build-stage --chown=golang:golang /app/src/api-server /mc_reverse_proxy/api-server
 
 COPY --chown=golang:golang ./config.json /mc_reverse_proxy/config.json
-COPY --chown=golang:golang ./host.json /mc_reverse_proxy/host.json
 
 RUN chmod +x /mc_reverse_proxy/api-server
 
 EXPOSE 25565
+EXPOSE 8088
+EXPOSE 8080
+
 CMD ["/mc_reverse_proxy/api-server"]

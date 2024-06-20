@@ -8,6 +8,8 @@ type Log struct {
 	ErrorMetric
 	ProxyMetric
 	PlayerMetric
+	SystemMetric
+	*GameServerMetric
 }
 
 func NewLog() Log {

@@ -16,27 +16,20 @@ import (
 type Iproxy interface {
 	ImplProxy()
 	Serve()
-	// UseMetricExporter(string)
-	metricService.Loggable
 }
 
 type MinecraftProxy struct {
-	Listener *net.Listener
-
-	routerLock sync.Mutex
-
-	threadWaitGroup *sync.WaitGroup
-
 	MetricCollector *metricService.MetricService
+	ProxyMetric     metricDTO.ProxyMetric
+	ErrorMetric     metricDTO.ErrorMetric
+	metricExporter  metricAdaptor.MetricAdaptor
 
-	ProxyMetric metricDTO.ProxyMetric
-	ErrorMetric metricDTO.ErrorMetric
+	Repository proxyService.ServerRepositoryService
 
-	metricExporter metricAdaptor.MetricAdaptor
-
-	init bool
-
-	repository proxyService.ServerRepositoryService
+	Listener        *net.Listener
+	routerLock      sync.Mutex
+	threadWaitGroup *sync.WaitGroup
+	init            bool
 
 	// logger *Logger.Logger
 }
@@ -56,22 +49,18 @@ func (p *MinecraftProxy) Log() metricDTO.Log {
 func (p *MinecraftProxy) Serve() {
 	if p.metricExporter != nil && !p.init {
 		go func(p *MinecraftProxy) {
-			defer log.Println("[metricExporter] Thread exit")
 			p.metricExporter.Serve()
 		}(p)
 		p.init = true
 	}
 	for {
-		statemachine := statemachine.NewNetworkStatemachine(p.Listener, p.repository, &p.ProxyMetric, p.MetricCollector)
+		statemachine := statemachine.NewNetworkStatemachine(p.Listener, p.Repository, &p.ProxyMetric, p.MetricCollector)
 		go statemachine.Run()
 		<-statemachine.ClientConnected
 
 		log.Printf("[Proxy] Connection between proxy and client established")
-		// uuid := p.MetricCollector.Register(statemachine)
 		go func(uuid string) {
 			<-statemachine.Ctx.Done()
-			log.Printf("[sm manager] cleanup")
-			// p.MetricCollector.Unregister(uuid)
 		}("")
 	}
 }
@@ -82,7 +71,12 @@ func NewProxy(listenAddr string, metricService *metricService.MetricService) (Ip
 		return nil, err
 	}
 	log.Printf("[Proxy] Accepting connection at %s", listenAddr)
-	proxy := &MinecraftProxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}, MetricCollector: metricService}
+	repo := proxyService.NewQLServerRepositoryService()
+	err = repo.Load()
+	if err != nil {
+		return nil, err
+	}
+	proxy := &MinecraftProxy{Listener: &listener, threadWaitGroup: &sync.WaitGroup{}, MetricCollector: metricService, Repository: repo}
 	proxy.MetricCollector.Register(proxy)
 	return proxy, nil
 }

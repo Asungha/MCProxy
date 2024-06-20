@@ -24,13 +24,13 @@ func True() bool {
 
 type StateMetadata map[string]interface{}
 
-func CastMetadata[T any](data interface{}) *T {
-	casted, ok := data.(T)
-	if !ok {
-		return nil
-	}
-	return &casted
-}
+// func CastMetadata[T any](data interface{}) *T {
+// 	casted, ok := data.(T)
+// 	if !ok {
+// 		return nil
+// 	}
+// 	return &casted
+// }
 
 type IState interface {
 	Init(Function) IState
@@ -39,9 +39,6 @@ type IState interface {
 	Transition() (IState, error)
 
 	AddTransistionFunction(TransistionFunction)
-
-	SetMetadata(string, any)
-	GetMetadata(string) any
 
 	SetTimeout(time.Duration)
 	GetTimeout() time.Duration
@@ -56,8 +53,6 @@ type State struct {
 	enter                Function
 	timeout              time.Duration
 	useTimeout           bool
-
-	IState
 }
 
 func NewState(fx Function) *State {

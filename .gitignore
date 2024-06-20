@@ -5,3 +5,7 @@ tmp/test.go
 **/*.log
 **/*.bin
 **/*.text
+**/node_modules
+**/.*
+**/*.db
+./host.json

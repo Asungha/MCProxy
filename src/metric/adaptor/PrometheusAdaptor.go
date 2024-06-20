@@ -10,8 +10,8 @@ import (
 
 type PrometheusAdaptor struct {
 	MetricCollecter *service.MetricService
-	ListenAddress   string
-	MetricAdaptor
+
+	ListenAddress string
 }
 
 func (e *PrometheusAdaptor) handler(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +25,6 @@ func (e *PrometheusAdaptor) handler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[Prometheus Exporter] Error: %v", err)
 		return
 	}
-	// fmt.Println(l.GetMetric())
 	w.Write([]byte(l.GetMetric()))
 }
 

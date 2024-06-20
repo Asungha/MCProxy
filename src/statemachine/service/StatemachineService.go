@@ -3,7 +3,6 @@ package statemachine
 import (
 	"context"
 	"errors"
-	"log"
 	state "mc_reverse_proxy/src/statemachine/dto"
 	statemachineDTO "mc_reverse_proxy/src/statemachine/dto"
 )
@@ -30,12 +29,12 @@ type IStateMachine interface {
 
 type StateMachine struct {
 	currectState statemachineDTO.IState
-	States       map[string]statemachineDTO.IState
-	Conditions   []Condition
-	Ctx          context.Context
-	Cancle       context.CancelCauseFunc
-	DeferFunc    statemachineDTO.DeferFunction
-	IStateMachine
+
+	States     map[string]statemachineDTO.IState
+	Conditions []Condition
+	Ctx        context.Context
+	Cancle     context.CancelCauseFunc
+	DeferFunc  statemachineDTO.DeferFunction
 }
 
 func (sm *StateMachine) RegisterState(stateName string, s statemachineDTO.IState) error {
@@ -94,14 +93,11 @@ func (sm *StateMachine) State(s string) state.IState {
 }
 
 func (sm *StateMachine) Run() error {
-	// defer log.Println("[statemachine worker] Thread exit")
-	// log.Println("[statemachine worker] start")
 	defer sm.Destruct()
 	defer sm.DeferFunc()
 	for {
 		err := (sm.currectState).Enter()
 		if err != nil {
-			log.Printf("run err %v", err.Error())
 			return err
 		}
 

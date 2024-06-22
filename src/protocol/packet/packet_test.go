@@ -198,7 +198,7 @@ func TestDeserialize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := Deserialize(tt.args.data)
+			got, _, got1, err := Deserialize(tt.args.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deserialize() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -256,7 +256,7 @@ func TestPacketRound(t *testing.T) {
 				return
 			}
 			t.Logf("%x", data)
-			pac, remaining, err := Deserialize(data)
+			pac, _, remaining, err := Deserialize(data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deserialize() error = %v, wantErr %v", err, tt.wantErr)
 				return

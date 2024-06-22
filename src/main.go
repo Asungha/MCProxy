@@ -1,11 +1,13 @@
 package main
 
 import (
+	"log"
 	configService "mc_reverse_proxy/src/configuration/service"
 	controlAdaptor "mc_reverse_proxy/src/control/adaptor"
 	controlService "mc_reverse_proxy/src/control/service"
 	metricAdaptor "mc_reverse_proxy/src/metric/adaptor"
 	metricService "mc_reverse_proxy/src/metric/service"
+	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	proxyAdaptor "mc_reverse_proxy/src/proxy/adaptor"
 	proxyService "mc_reverse_proxy/src/proxy/service"
 	webui "mc_reverse_proxy/src/webui"
@@ -48,6 +50,13 @@ func main() {
 	}
 
 	defer p.(*proxyAdaptor.MinecraftProxy).Repository.(proxyService.UpdatableRepositoryService).Destroy()
+
+	if config.LoggerMongoDBName != "" {
+		err := packetLoggerService.InitPacketLogger(config)
+		if err != nil {
+			log.Printf("Packet logger error : %v", err)
+		}
+	}
 
 	p.Serve()
 }

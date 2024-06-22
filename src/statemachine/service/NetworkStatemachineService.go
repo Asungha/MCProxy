@@ -17,7 +17,7 @@ import (
 	proxyService "mc_reverse_proxy/src/proxy/service"
 
 	// state "mc_reverse_proxy/src/state/state"
-	"mc_reverse_proxy/src/utils"
+
 	"net"
 	"strings"
 	"sync"
@@ -102,6 +102,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 		sm.playerMetric.Port = s[1]
 		ClientConnected <- true
 		go sm.Conn.ListenClient()
+		log.Printf("[init state] accepted client")
 		return nil
 	}
 
@@ -109,13 +110,8 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 		select {
 		case rawData := <-sm.Conn.ClientData:
 			hs := pac.Handshake{}
-			if utils.IsHTTPMethod(strings.Split(string(rawData), " ")[0]) {
-				isHttp = true
-				playerMetric.PacketDeserializeFailed += 1
-				logPusher.PushErrorMetric(metricDTO.ErrorMetric{PacketDeserializeFailed: 1})
-				return nil
-			}
-			err := hs.Decode(rawData)
+			err, _ := hs.Decode(rawData)
+			log.Printf("[handshake state] got data")
 			if err != nil {
 				playerMetric.PacketDeserializeFailed += 1
 				if bytes.Equal(rawData[:2], []byte{0xfe, 0x01}) {
@@ -127,11 +123,12 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 			*hostname = hs.GetHostname()
 			Data = &hs
 		case <-sm.Conn.Ctx.Done():
+			log.Printf("[handshake state] Context Done")
 			return errors.New("Context Done")
 		}
 		if len(Data.Tail) > 2 {
 			l := pac.Login{}
-			err := l.Decode(Data.Tail)
+			err, _ := l.Decode(Data.Tail)
 			if err != nil {
 				playerMetric.PacketDeserializeFailed += 1
 				logPusher.PushErrorMetric(metricDTO.ErrorMetric{PacketDeserializeFailed: 1})
@@ -247,7 +244,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 		case cData := <-sm.Conn.ClientData:
 			StateChangeLock.Lock()
 			p := pac.Login{}
-			err := p.Decode(cData)
+			err, _ := p.Decode(cData)
 			if err != nil {
 				return err
 			}

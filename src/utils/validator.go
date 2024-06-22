@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
+	"strings"
 )
 
 var PING_HOST = []byte{0xfe, 0x01, 0xfa, 0x00, 0x0b, 0x00, 0x4D, 0x00, 0x43, 0x00, 0x7C, 0x00, 0x50, 0x00, 0x69, 0x00, 0x6E, 0x00, 0x67, 0x00, 0x48, 0x00, 0x6F, 0x00, 0x73, 0x00, 0x74}
@@ -36,34 +38,43 @@ func (b *ByteReader) ReadByte() (byte, error) {
 	return buf[0], err
 }
 
-func ValidateDataframe(buffer []byte) (error, bool) {
+func ValidateDataframe(buffer []byte) (error, bool, packetLoggerService.PacketType) {
 	reader := bytes.NewReader(buffer)
 
 	firstBytes := make([]byte, len(PING_HOST))
 	_, err := reader.Read(firstBytes)
 	if err == nil && bytes.Equal(firstBytes, PING_HOST) {
-		return nil, true
+		return nil, true, packetLoggerService.MC_HANDSHAKE
 	} else {
 		reader.Reset(buffer)
 	}
 
+	err = nil
+
 	for reader.Len() > 0 {
-		length, err := UvarintReader(reader)
-		if err != nil {
-			return fmt.Errorf("failed to read length: %v", err), false
+		length, _err := UvarintReader(reader)
+		if _err != nil {
+			err = fmt.Errorf("failed to read length: %v", err)
 		}
 		if reader.Len() < length {
-			return fmt.Errorf("length invalid"), false
+			err = fmt.Errorf("length invalid")
 		}
 		buf := make([]byte, length)
-		n, err := reader.Read(buf)
-		if err != nil {
-			return fmt.Errorf("failed to read payload: %v", err), false
+		n, _err := reader.Read(buf)
+		if _err != nil {
+			err = fmt.Errorf("failed to read payload: %v", err)
 		}
 		if n != length {
-			return fmt.Errorf("length invalid"), false
+			err = fmt.Errorf("length invalid")
 		}
 	}
 
-	return nil, false
+	if err != nil {
+		if IsHTTPMethod(strings.Split(string(buffer), " ")[0]) {
+			return err, false, packetLoggerService.HTTP
+		}
+		return err, false, packetLoggerService.UNKNOWN
+	}
+
+	return nil, false, packetLoggerService.MC_OTHER
 }

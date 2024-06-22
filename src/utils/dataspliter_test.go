@@ -1,6 +1,7 @@
 package utils
 
 import (
+	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	"reflect"
 	"testing"
 )
@@ -12,7 +13,7 @@ func TestSplitDataframe(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    [][]byte
+		want    []PacketFragment
 		wantErr bool
 	}{
 		{
@@ -20,7 +21,7 @@ func TestSplitDataframe(t *testing.T) {
 			args: args{
 				buffer: []byte{0x01, 0x00},
 			},
-			want:    [][]byte{{0x01, 0x00}},
+			want:    []PacketFragment{{Data: []byte{0x01, 0x00}, Type: packetLoggerService.MC_OTHER}},
 			wantErr: false,
 		},
 		{
@@ -28,7 +29,10 @@ func TestSplitDataframe(t *testing.T) {
 			args: args{
 				buffer: []byte{0x01, 0x00, 0x02, 0x01, 0x00},
 			},
-			want:    [][]byte{{0x01, 0x00}, {0x02, 0x01, 0x00}},
+			want: []PacketFragment{
+				{Data: []byte{0x01, 0x00}, Type: packetLoggerService.MC_OTHER},
+				{Data: []byte{0x02, 0x01, 0x00}, Type: packetLoggerService.MC_OTHER},
+			},
 			wantErr: false,
 		},
 		{
@@ -36,7 +40,11 @@ func TestSplitDataframe(t *testing.T) {
 			args: args{
 				buffer: []byte{0x01, 0x00, 0x02, 0x01, 0x00, 0x03, 0x02, 0x01, 0x00},
 			},
-			want:    [][]byte{{0x01, 0x00}, {0x02, 0x01, 0x00}, {0x03, 0x02, 0x01, 0x00}},
+			want: []PacketFragment{
+				{Data: []byte{0x01, 0x00}, Type: packetLoggerService.MC_OTHER},
+				{Data: []byte{0x02, 0x01, 0x00}, Type: packetLoggerService.MC_OTHER},
+				{Data: []byte{0x03, 0x02, 0x01, 0x00}, Type: packetLoggerService.MC_OTHER},
+			},
 			wantErr: false,
 		},
 		{
@@ -44,7 +52,7 @@ func TestSplitDataframe(t *testing.T) {
 			args: args{
 				buffer: []byte{},
 			},
-			want:    [][]byte{},
+			want:    []PacketFragment{},
 			wantErr: true,
 		},
 	}

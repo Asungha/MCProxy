@@ -2,13 +2,17 @@ package network
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
 	metricDTO "mc_reverse_proxy/src/metric/dto"
+	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	utils "mc_reverse_proxy/src/utils"
 	"net"
+	"strings"
 	"sync"
+	"time"
 )
 
 type ConnectionService struct {
@@ -83,13 +87,26 @@ func (c *ConnectionService) ListenClient() error {
 			data := buf[:n]
 			fragments, err := utils.SplitDataframe(data)
 			if err != nil {
+				if len(fragments) != 0 {
+					for _, f := range fragments {
+						addr := (*c.ClientConn).RemoteAddr().String()
+						addr = strings.Replace(addr, "[::1]", "localhost", 1)
+						packetLoggerService.Send(packetLoggerService.PacketLog{
+							Type:      f.Type,
+							IP:        strings.Split(addr, ":")[0],
+							Port:      strings.Split(addr, ":")[1],
+							Timestamp: time.Now(),
+							Data:      hex.EncodeToString(f.Data),
+						})
+					}
+				}
 				c.Cancle(err)
 				buf = nil
 				errs <- err
 				return
 			}
 			for _, f := range fragments {
-				c.ClientData <- f
+				c.ClientData <- f.Data
 			}
 			buf = nil
 		}

@@ -7,6 +7,7 @@ import (
 
 	// hex "mc_reverse_proxy/src/utils"
 	"encoding/binary"
+	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	utils "mc_reverse_proxy/src/utils"
 )
 
@@ -79,10 +80,10 @@ func (h *Handshake) Encode() ([]byte, error) {
 	return data, nil
 }
 
-func (h *Handshake) Decode(data []byte) error {
-	packet, remainingdate, err := Deserialize(data)
+func (h *Handshake) Decode(data []byte) (error, packetLoggerService.PacketType) {
+	packet, packetType, remainingdate, err := Deserialize(data)
 	if err != nil {
-		return err
+		return err, packetType
 	}
 	if packet.IsOldProtocol {
 		h.PacketHeader = packet.PacketHeader
@@ -92,39 +93,39 @@ func (h *Handshake) Decode(data []byte) error {
 		// length_b := make([]byte, 2)
 		_, err := reader.Read(make([]byte, 2))
 		if err != nil {
-			return err
+			return err, packetType
 		}
 		// _ := binary.BigEndian.Uint64(length_b)
 
 		protocol_b := make([]byte, 1)
 		_, err = reader.Read(protocol_b[:])
 		if err != nil {
-			return err
+			return err, packetType
 		}
 		protocol := int(protocol_b[0])
 
 		str_length_b := make([]byte, 2)
 		_, err = reader.Read(str_length_b[:])
 		if err != nil {
-			return err
+			return err, packetType
 		}
 		str_length := int(str_length_b[1]) | int(str_length_b[0])<<8
 
 		hostname_b := make([]byte, str_length*2)
 		_, err = reader.Read(hostname_b[:])
 		if err != nil {
-			return err
+			return err, packetType
 		}
 		hostname_utf8, err := utils.UTF16toUTF8(hostname_b)
 		if err != nil {
-			return err
+			return err, packetType
 		}
 		hostname := fmt.Sprintf("%s", hostname_utf8)
 
 		port_b := make([]byte, 4)
 		_, err = reader.Read(hostname_b[:])
 		if err != nil {
-			return err
+			return err, packetType
 		}
 		port := int(port_b[1]) | int(port_b[0])<<8
 
@@ -134,14 +135,14 @@ func (h *Handshake) Decode(data []byte) error {
 		h.HostnameLength = int(str_length)
 		h.NextState = 0x01
 		h.RawData = data
-		return nil
+		return nil, packetType
 	}
 	h.PacketHeader = packet.PacketHeader
 	// n := int(packet.Length)
 	// protocolVersion, v_length := binary.Uvarint(packet.Payload)
 	protocolVersion, err := utils.UvarintReader(packet.Payload)
 	if err != nil {
-		return err
+		return err, packetType
 	}
 	// if n-v_length <= 0 {
 	// 	return fmt.Errorf("invalid ProtocolVersion: %d", protocolVersion)
@@ -149,7 +150,7 @@ func (h *Handshake) Decode(data []byte) error {
 	// h_length, s_length := binary.Uvarint(packet.Payload[v_length:])
 	hostnameLength, err := utils.UvarintReader(packet.Payload)
 	if err != nil {
-		return err
+		return err, packetType
 	}
 	// if n-v_length-s_length <= 0 {
 	// 	return fmt.Errorf("invalid Hostname Length: %d", s_length)
@@ -161,7 +162,7 @@ func (h *Handshake) Decode(data []byte) error {
 	hostname := make([]byte, hostnameLength)
 	_, err = packet.Payload.Read(hostname)
 	if err != nil {
-		return err
+		return err, packetType
 	}
 
 	if strings.Contains(string(hostname), `\0FML\0`) {
@@ -173,7 +174,7 @@ func (h *Handshake) Decode(data []byte) error {
 	port := make([]byte, 2)
 	_, err = packet.Payload.Read(port)
 	if err != nil {
-		return err
+		return err, packetType
 	}
 
 	h.Port = int(binary.BigEndian.Uint16(port))
@@ -183,14 +184,14 @@ func (h *Handshake) Decode(data []byte) error {
 	nextState := [1]byte{}
 	_, err = packet.Payload.Read(nextState[:])
 	if err != nil {
-		return err
+		return err, packetType
 	}
 	h.NextState = nextState[0]
 	// remainingData := packet.Payload[v_length+int(h_length)+3+1:]
 	if l := len(remainingdate); l != 0 {
 		h.Tail = remainingdate
 	}
-	return nil
+	return nil, packetType
 }
 
 func (h *Handshake) String() string {

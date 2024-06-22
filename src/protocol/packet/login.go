@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	utils "mc_reverse_proxy/src/utils"
 )
 
@@ -39,14 +40,14 @@ func (p *Login) Encode() ([]byte, error) {
 	return data, nil
 }
 
-func (p *Login) Decode(data []byte) error {
-	packet, _, err := Deserialize(data)
+func (p *Login) Decode(data []byte) (error, packetLoggerService.PacketType) {
+	packet, packerType, _, err := Deserialize(data)
 	if err != nil {
-		return err
+		return err, packerType
 	}
 	pname_l, err := utils.UvarintReader(packet.Payload)
 	if err != nil {
-		return err
+		return err, packerType
 	}
 	if pname_l == 0 {
 		p.isEmpty = true
@@ -58,7 +59,7 @@ func (p *Login) Decode(data []byte) error {
 	uuid := make([]byte, packet.Payload.Len())
 	packet.Payload.Read(uuid)
 	p.UUID = uuid
-	return nil
+	return nil, packerType
 }
 
 func (p *Login) String() string {

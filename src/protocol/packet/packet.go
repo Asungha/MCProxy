@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	"mc_reverse_proxy/src/utils"
 )
 
@@ -72,33 +73,33 @@ func Serialize(packet Packet) ([]byte, error) {
 	return append(length[:sn], encoded...), nil
 }
 
-func Deserialize(data []byte) (Packet, RemainingData, error) {
+func Deserialize(data []byte) (Packet, packetLoggerService.PacketType, RemainingData, error) {
 	trueLength := len(data)
 	if trueLength == 0 {
-		return Packet{}, []byte{}, errors.New("empty data")
+		return Packet{}, packetLoggerService.UNKNOWN, []byte{}, errors.New("empty data")
 	}
-	err, isOldProtocol := utils.ValidateDataframe(data)
+	err, isOldProtocol, packetType := utils.ValidateDataframe(data)
 	if err != nil {
-		log.Printf("[Packet deserializer] Validation Error: %v", err)
-		return Packet{}, []byte{}, err
+		log.Printf("[Packet deserializer] Validation Error: %v, Inferred packet type: %s", err, packetType)
+		return Packet{}, packetType, []byte{}, err
 	}
 	if !isOldProtocol {
 		length, n_length := binary.Uvarint(data)
 		id := data[n_length]
 		raw := Packet{PacketHeader: PacketHeader{ID: id, Length: length}, Payload: bytes.NewReader(data[n_length+1:])}
 		if err := raw.Check(); err != nil {
-			return Packet{}, []byte{}, err
+			return Packet{}, packetType, []byte{}, err
 		}
 		if int(length)+n_length == trueLength {
-			return raw, []byte{}, nil
+			return raw, packetType, []byte{}, nil
 		}
 		remaining := data[length+1:]
-		return raw, remaining, nil
+		return raw, packetType, remaining, nil
 	} else {
 		raw := Packet{PacketHeader: PacketHeader{ID: 0x00, IsOldProtocol: true, Length: 1}, Payload: bytes.NewReader(data)}
 		if err := raw.Check(); err != nil {
-			return Packet{}, []byte{}, err
+			return Packet{}, packetType, []byte{}, err
 		}
-		return raw, []byte{}, nil
+		return raw, packetType, []byte{}, nil
 	}
 }

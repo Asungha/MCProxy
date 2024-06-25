@@ -7,7 +7,7 @@ import (
 
 	// hex "mc_reverse_proxy/src/utils"
 	"encoding/binary"
-	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
+	. "mc_reverse_proxy/src/common"
 	utils "mc_reverse_proxy/src/utils"
 )
 
@@ -80,8 +80,8 @@ func (h *Handshake) Encode() ([]byte, error) {
 	return data, nil
 }
 
-func (h *Handshake) Decode(data []byte) (error, packetLoggerService.PacketType) {
-	packet, packetType, remainingdate, err := Deserialize(data)
+func (h *Handshake) Decode(data []byte, isHandshake bool) (error, PacketType) {
+	packet, packetType, remainingdate, err := Deserialize(data, isHandshake)
 	if err != nil {
 		return err, packetType
 	}

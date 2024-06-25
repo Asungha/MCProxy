@@ -143,7 +143,8 @@ func TestHandshake_Encode(t *testing.T) {
 
 func TestHandshake_Decode(t *testing.T) {
 	type args struct {
-		data []byte
+		data        []byte
+		isHandshake bool
 	}
 	tests := []struct {
 		name    string
@@ -154,43 +155,43 @@ func TestHandshake_Decode(t *testing.T) {
 		{
 			name:    "Normal Ping 1",
 			h:       SAMPLE_STATUS_PAYLOAD_PACKET_1,
-			args:    args{data: SAMPLE_STATUS_DATA_1},
+			args:    args{data: SAMPLE_STATUS_DATA_1, isHandshake: true},
 			wantErr: false,
 		},
 		{
 			name:    "Normal Ping 2",
 			h:       SAMPLE_STATUS_PAYLOAD_PACKET_2,
-			args:    args{data: SAMPLE_STATUS_DATA_2},
+			args:    args{data: SAMPLE_STATUS_DATA_2, isHandshake: true},
 			wantErr: false,
 		},
 		{
 			name:    "Empty data",
 			h:       SAMPLE_STATUS_PAYLOAD_PACKET_2,
-			args:    args{data: EMPTY_DATA},
+			args:    args{data: EMPTY_DATA, isHandshake: true},
 			wantErr: true,
 		},
 		{
 			name:    "Non relevant data",
 			h:       SAMPLE_STATUS_PAYLOAD_PACKET_2,
-			args:    args{data: NON_RELEVANT_DATA},
+			args:    args{data: NON_RELEVANT_DATA, isHandshake: true},
 			wantErr: true,
 		},
 		{
 			name:    "tailling data",
 			h:       SAMPLE_STATUS_PAYLOAD_PACKET__TAILLING,
-			args:    args{data: SAMPLE_STATUS_DATA_TAILLING},
+			args:    args{data: SAMPLE_STATUS_DATA_TAILLING, isHandshake: true},
 			wantErr: false,
 		},
 		{
 			name:    "Legacy status",
 			h:       *NewHandshake(),
-			args:    args{data: LEGACY_STATUS_REQ},
+			args:    args{data: LEGACY_STATUS_REQ, isHandshake: true},
 			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err, _ := tt.h.Decode(tt.args.data); (err != nil) != tt.wantErr {
+			if err, _ := tt.h.Decode(tt.args.data, tt.args.isHandshake); (err != nil) != tt.wantErr {
 				t.Errorf("Handshake.Decode() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

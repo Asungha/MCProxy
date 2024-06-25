@@ -5,6 +5,7 @@ import (
 	"log"
 	proto "mc_reverse_proxy/src/control/controlProto"
 	service "mc_reverse_proxy/src/control/service"
+	"mc_reverse_proxy/src/utils"
 	"net"
 
 	"google.golang.org/grpc"
@@ -32,7 +33,8 @@ func (s *GRPCControlCenter) Serve() error {
 
 	}
 
-	log.Printf("[GRPC control] Start server on %s", s.address)
+	// log.Printf("[GRPC control] Start server on %s", s.address)
+	utils.FLog.GRPCControl("Start server on %s", s.address)
 	if err := server.Serve(lis); err != nil {
 		return err
 	}

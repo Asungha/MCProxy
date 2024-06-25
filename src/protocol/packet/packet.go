@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
+	. "mc_reverse_proxy/src/common"
 	"mc_reverse_proxy/src/utils"
+	"strings"
 )
 
 // var PINGHOST = [...]byte{0x00, 0x0b, 0x00, 0x4d, 0x00, 0x43, 0x00, 0x7c, 0x00, 0x50, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x67, 0x00, 0x48, 0x00, 0x6f, 0x00, 0x73, 0x00, 0x74}
@@ -73,33 +74,55 @@ func Serialize(packet Packet) ([]byte, error) {
 	return append(length[:sn], encoded...), nil
 }
 
-func Deserialize(data []byte) (Packet, packetLoggerService.PacketType, RemainingData, error) {
+func Deserialize(data []byte, isHandshake bool) (Packet, PacketType, RemainingData, error) {
 	trueLength := len(data)
 	if trueLength == 0 {
-		return Packet{}, packetLoggerService.UNKNOWN, []byte{}, errors.New("empty data")
+		return Packet{}, UNKNOWN, []byte{}, errors.New("empty data")
 	}
-	err, isOldProtocol, packetType := utils.ValidateDataframe(data)
-	if err != nil {
-		log.Printf("[Packet deserializer] Validation Error: %v, Inferred packet type: %s", err, packetType)
-		return Packet{}, packetType, []byte{}, err
-	}
-	if !isOldProtocol {
+	if isHandshake {
+		packetType := UNKNOWN
+		if utils.IsHTTPMethod(strings.Split(string(data), " ")[0]) {
+			packetType = HTTP
+		}
+		err, isOldProtocol := utils.ValidateHandshake(data)
+		if err != nil {
+			log.Printf("[Packet deserializer] Validation Error: %v, Inferred packet type: %s", err, packetType)
+			return Packet{}, packetType, []byte{}, err
+		}
+		if !isOldProtocol {
+			length, n_length := binary.Uvarint(data)
+			id := data[n_length]
+			raw := Packet{PacketHeader: PacketHeader{ID: id, Length: length}, Payload: bytes.NewReader(data[n_length+1:])}
+			if err := raw.Check(); err != nil {
+				return Packet{}, MC_HANDSHAKE, []byte{}, err
+			}
+			if int(length)+n_length == trueLength {
+				return raw, MC_HANDSHAKE, []byte{}, nil
+			}
+			remaining := data[length+1:]
+			return raw, MC_HANDSHAKE, remaining, nil
+		} else {
+			raw := Packet{PacketHeader: PacketHeader{ID: 0x00, IsOldProtocol: true, Length: 1}, Payload: bytes.NewReader(data)}
+			if err := raw.Check(); err != nil {
+				return Packet{}, packetType, []byte{}, err
+			}
+			return raw, packetType, []byte{}, nil
+		}
+	} else {
+		err := utils.ValidateMCPacket(data)
+		if err != nil {
+			return Packet{}, UNKNOWN, []byte{}, errors.New("validation failed. use strict = true for more detailed")
+		}
 		length, n_length := binary.Uvarint(data)
 		id := data[n_length]
 		raw := Packet{PacketHeader: PacketHeader{ID: id, Length: length}, Payload: bytes.NewReader(data[n_length+1:])}
 		if err := raw.Check(); err != nil {
-			return Packet{}, packetType, []byte{}, err
+			return Packet{}, MC_OTHER, []byte{}, err
 		}
 		if int(length)+n_length == trueLength {
-			return raw, packetType, []byte{}, nil
+			return raw, MC_OTHER, []byte{}, nil
 		}
 		remaining := data[length+1:]
-		return raw, packetType, remaining, nil
-	} else {
-		raw := Packet{PacketHeader: PacketHeader{ID: 0x00, IsOldProtocol: true, Length: 1}, Payload: bytes.NewReader(data)}
-		if err := raw.Check(); err != nil {
-			return Packet{}, packetType, []byte{}, err
-		}
-		return raw, packetType, []byte{}, nil
+		return raw, MC_OTHER, remaining, nil
 	}
 }

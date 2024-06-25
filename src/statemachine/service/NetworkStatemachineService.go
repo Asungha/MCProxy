@@ -10,11 +10,14 @@ import (
 	metricService "mc_reverse_proxy/src/metric/service"
 	pac "mc_reverse_proxy/src/protocol/packet"
 	networkService "mc_reverse_proxy/src/protocol/service"
+	"mc_reverse_proxy/src/utils"
 
 	// statemachine "mc_reverse_proxy/src/proxy/service/statemachine"
 	state "mc_reverse_proxy/src/statemachine/dto"
 
 	proxyService "mc_reverse_proxy/src/proxy/service"
+
+	config "mc_reverse_proxy/src/configuration/service"
 
 	// state "mc_reverse_proxy/src/state/state"
 
@@ -57,7 +60,7 @@ func (sm *NetworkStateMachine) Serve() error {
 	return sm.Run()
 }
 
-func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.ServerRepositoryService, serverMetric *metricDTO.ProxyMetric, metricCollector *metricService.MetricService) *NetworkStateMachine {
+func NewNetworkStatemachine(configService *config.ConfigurationService, listener *net.Listener, serverRepo proxyService.ServerRepositoryService, serverMetric *metricDTO.ProxyMetric, metricCollector *metricService.MetricService) *NetworkStateMachine {
 	ctx, cancle := context.WithCancelCause(context.Background())
 	sm := &NetworkStateMachine{
 		StateChangeLock: sync.Mutex{},
@@ -65,7 +68,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 		// proxyMetric:     metric.ProxyMetric{},
 		ClientConnected: make(chan bool, 1),
 	}
-	sm.Conn = networkService.NewConnectionService(&sm.StateChangeLock, ctx, cancle, listener)
+	sm.Conn = networkService.NewConnectionService(configService, &sm.StateChangeLock, ctx, cancle, listener)
 	// sm.playerMetric.NetworkMetric = &sm.Conn.NetworkMetric
 	sm.serverRepo = serverRepo
 	sm.Ctx = ctx
@@ -102,16 +105,20 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 		sm.playerMetric.Port = s[1]
 		ClientConnected <- true
 		go sm.Conn.ListenClient()
-		log.Printf("[init state] accepted client")
+		// log.Printf("[init state] accepted client")
+		utils.FLogDebug.ApplicationConn("Session %s, \tAccepted connection", sm.Conn.SessionId)
 		return nil
 	}
 
 	var handshakeHandler state.Function = func(i state.IState) error {
+		sm.Conn.StrictValidation = true
+		defer func() {
+			sm.Conn.StrictValidation = false
+		}()
 		select {
 		case rawData := <-sm.Conn.ClientData:
 			hs := pac.Handshake{}
-			err, _ := hs.Decode(rawData)
-			log.Printf("[handshake state] got data")
+			err, _ := hs.Decode(rawData, true)
 			if err != nil {
 				playerMetric.PacketDeserializeFailed += 1
 				if bytes.Equal(rawData[:2], []byte{0xfe, 0x01}) {
@@ -123,7 +130,6 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 			*hostname = hs.GetHostname()
 			Data = &hs
 		case <-sm.Conn.Ctx.Done():
-			log.Printf("[handshake state] Context Done")
 			return errors.New("Context Done")
 		}
 		if len(Data.Tail) > 2 {
@@ -142,6 +148,7 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 			logPusher.PushProxyMetric(metricDTO.ProxyMetric{PlayerLogin: 1})
 		}
 		if target, err := sm.serverRepo.Resolve(*hostname); err == nil {
+			utils.FLogDebug.ApplicationConn("Session %s, \tHostname %s resolved as %s", sm.Conn.SessionId, *hostname, target)
 			err := sm.Conn.ConnectServer(target)
 			if err != nil {
 				playerMetric.ServerConnectFailed += 1
@@ -248,7 +255,8 @@ func NewNetworkStatemachine(listener *net.Listener, serverRepo proxyService.Serv
 			if err != nil {
 				return err
 			}
-			log.Printf("[Loging state] Player %s logged in", p.Name)
+			// log.Printf("[Loging state] Player %s logged in", p.Name)
+			utils.FLogDebug.Proxy("Session %s, Login as %s", sm.Conn.SessionId, p.Name)
 			sm.playerMetric.PlayerName = p.Name
 			sm.playerMetric.LogginTime = time.Now()
 			sm.Conn.WriteServer(cData)

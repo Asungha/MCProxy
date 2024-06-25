@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"mc_reverse_proxy/src/utils"
 	"net/http"
 	"strings"
 
@@ -48,10 +49,12 @@ func (f *HTTPFrontend) Config(engine *gin.Engine) {
 func (f *HTTPFrontend) Serve() error {
 	engine := gin.Default()
 	f.Config(engine)
+	utils.FLog.HTTPFrontend("Start server on %s", f.address)
 	return engine.Run(f.address)
 }
 
 func NewHTTPFrontend(address string, backendHostname string) *HTTPFrontend {
+	gin.SetMode(gin.ReleaseMode)
 	f := &HTTPFrontend{
 		address:         address,
 		backendHostname: backendHostname,

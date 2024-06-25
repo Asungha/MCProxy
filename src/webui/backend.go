@@ -6,6 +6,7 @@ import (
 	service "mc_reverse_proxy/src/control/service"
 	metricService "mc_reverse_proxy/src/metric/service"
 	proxyService "mc_reverse_proxy/src/proxy/service"
+	"mc_reverse_proxy/src/utils"
 	common "mc_reverse_proxy/src/webui/backend/common"
 	control "mc_reverse_proxy/src/webui/backend/control/controller"
 	metric "mc_reverse_proxy/src/webui/backend/metric/controller"
@@ -43,10 +44,13 @@ func (b *HTTPBackend) Serve() error {
 	engine := gin.Default()
 	engine.Use(CORSMiddleware())
 	b.Config(engine)
+	// log.Printf("[HTTP Backend] Start server on %s", b.address)
+	utils.FLog.HTTPBackend("Start server on %s", b.address)
 	return engine.Run(b.address)
 }
 
 func NewHTTPBackend(address string, metricCollector *metricService.MetricService, serverRepo proxyService.ServerRepositoryService, eventService *service.EventService) *HTTPBackend {
+	gin.SetMode(gin.ReleaseMode)
 	b := &HTTPBackend{
 		Controller: []common.HTTPController{
 			metric.NewMetricController(metricCollector),

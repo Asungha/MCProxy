@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"log"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	. "mc_reverse_proxy/src/common"
 	config "mc_reverse_proxy/src/configuration/service"
+	utils "mc_reverse_proxy/src/utils"
 
 	"time"
 )
@@ -15,17 +18,6 @@ import (
 type PacketLoggable interface {
 	Register(*PacketLogger) error
 }
-
-type PacketType string
-
-const (
-	UNKNOWN      PacketType = "unknown"
-	MC_HANDSHAKE PacketType = "mc_handshake"
-	MC_LOGIN     PacketType = "mc_login"
-	MC_GAMMPLAY  PacketType = "mc_gameplay"
-	MC_OTHER     PacketType = "mc_other"
-	HTTP         PacketType = "http"
-)
 
 type PacketLog struct {
 	Type      PacketType `json:"type" bson:"type"`
@@ -49,19 +41,24 @@ func InitPacketLogger(config *config.ConfigurationService) error {
 	if err != nil {
 		return err
 	}
-	log.Println("[Packet Logger] Connected to mongodb")
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	if err := client.Ping(ctx, nil); err != nil {
+		return err
+	}
+	splitted := strings.Split(config.LoggerMongoDBAddress, "@")
+	utils.FLog.PacketLogger("Connected to MongoDB at %s using database \"%s\" and collection \"%s\"", strings.ReplaceAll(splitted[len(splitted)-1], "/", ""), config.LoggerMongoDBName, config.LoggerMongoColName)
 	packetLogger = &PacketLogger{client: client, config: config}
 	return nil
 }
 
 func Send(data PacketLog) {
 	if packetLogger != nil {
-		ctx, _ := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		_, err := packetLogger.client.Database(packetLogger.config.LoggerMongoDBName).Collection(packetLogger.config.LoggerMongoColName).InsertOne(ctx, data)
-		if err != nil {
-			log.Printf("[Packet Logger] Inserting error : %v", err)
-		}
-	} else {
-		log.Printf("[Packet Logger] Packet Logger not available")
+		go func() {
+			ctx, _ := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			_, err := packetLogger.client.Database(packetLogger.config.LoggerMongoDBName).Collection(packetLogger.config.LoggerMongoColName).InsertOne(ctx, data)
+			if err != nil {
+				log.Printf("[Packet Logger] Inserting error : %v", err)
+			}
+		}()
 	}
 }

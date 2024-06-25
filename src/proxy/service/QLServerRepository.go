@@ -3,7 +3,6 @@ package service
 import (
 	"database/sql"
 	"errors"
-	"log"
 	"os"
 
 	"github.com/cznic/ql"
@@ -68,7 +67,6 @@ func (s *QLServerRepositoryService) Resolve(hostname string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		log.Printf("[Host Resolver] %s %s", hostname, address)
 		return address, nil
 	}
 	return "", errors.New("host " + hostname + " not found")

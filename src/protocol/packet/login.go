@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
+	. "mc_reverse_proxy/src/common"
 	utils "mc_reverse_proxy/src/utils"
 )
 
@@ -40,8 +40,8 @@ func (p *Login) Encode() ([]byte, error) {
 	return data, nil
 }
 
-func (p *Login) Decode(data []byte) (error, packetLoggerService.PacketType) {
-	packet, packerType, _, err := Deserialize(data)
+func (p *Login) Decode(data []byte) (error, PacketType) {
+	packet, packerType, _, err := Deserialize(data, false)
 	if err != nil {
 		return err, packerType
 	}

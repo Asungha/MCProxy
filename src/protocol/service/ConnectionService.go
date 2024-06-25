@@ -1,4 +1,4 @@
-package network
+package service
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	config "mc_reverse_proxy/src/configuration/service"
 	metricDTO "mc_reverse_proxy/src/metric/dto"
 	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	utils "mc_reverse_proxy/src/utils"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type ConnectionService struct {
@@ -28,6 +31,11 @@ type ConnectionService struct {
 	Cancle          context.CancelCauseFunc
 	StateChangeLock *sync.Mutex
 	Listener        *net.Listener
+
+	configService *config.ConfigurationService
+
+	StrictValidation bool
+	SessionId        string
 }
 
 func (c *ConnectionService) WaitClientConnection() error {
@@ -39,7 +47,7 @@ func (c *ConnectionService) WaitClientConnection() error {
 		log.Printf("[Proxy] Failed to accept client connection: %v", err)
 		return err
 	}
-	log.Printf("[Proxy] Initiated connection between %s and %s", clientConn.RemoteAddr().String(), "localhost:25565")
+	utils.FLogDebug.Connection("Session %s, Initiated connection between client (%s) and the proxy", c.SessionId, clientConn.RemoteAddr().String())
 	c.ClientConn = &clientConn
 	c.ClientAddress = clientConn.RemoteAddr().String()
 	return nil
@@ -51,7 +59,8 @@ func (c *ConnectionService) ConnectServer(host string) error {
 		log.Printf("[Proxy] Failed to connect to upstream server: %v", err)
 		return err
 	}
-	log.Printf("[Proxy] Initiated connection between %s and %s", "proxy", upstreamConn.RemoteAddr().String())
+	// log.Printf("[Proxy] Initiated connection between %s and %s", "proxy", upstreamConn.RemoteAddr().String())
+	utils.FLogDebug.Connection("Session %s, Initiated connection between the proxy and server (%s)", c.SessionId, (*c.ClientConn).RemoteAddr().String())
 	c.ServerConn = &upstreamConn
 	return nil
 }
@@ -67,13 +76,14 @@ func (c *ConnectionService) PreConditionCheck() error {
 }
 
 func (c *ConnectionService) ListenClient() error {
+	defer utils.FLogDebug.Connection("Session %s, Client %s socket terminated", c.SessionId, (*c.ClientConn).RemoteAddr().String())
 	errs := make(chan error)
 	go func(errs chan error) {
 		for {
 			buf := make([]byte, 1024)
 			n, err := (*c.ClientConn).Read(buf)
 			if err != nil {
-				log.Printf("[client listener] Failed to read from client connection: %v", err)
+				// log.Printf("[client listener] Failed to read from client connection: %v", err)
 				c.Cancle(err)
 				buf = nil
 				errs <- err
@@ -85,7 +95,7 @@ func (c *ConnectionService) ListenClient() error {
 			c.NetworkMetric.ClientPacketRx += 1
 			c.NetworkMetric.ClientDataRx += uint(n)
 			data := buf[:n]
-			fragments, err := utils.SplitDataframe(data)
+			fragments, err := utils.SplitDataframe(data, c.StrictValidation)
 			if err != nil {
 				if len(fragments) != 0 {
 					for _, f := range fragments {
@@ -115,7 +125,7 @@ func (c *ConnectionService) ListenClient() error {
 		select {
 		case e := <-errs:
 			(*c.ClientConn).Close()
-			log.Printf("[client listener] Exit due to error: %v", e)
+			// log.Printf("[client listener] Exit due to error: %v", e)
 			c.Cancle(e)
 			<-c.Ctx.Done()
 			return nil
@@ -123,20 +133,21 @@ func (c *ConnectionService) ListenClient() error {
 			c.Cancle(nil)
 			(*c.ClientConn).Close()
 			<-errs
-			log.Printf("[client listener] Exit due context canceled")
+			// log.Printf("[client listener] Exit due context canceled")
 			return nil
 		}
 	}
 }
 
 func (c *ConnectionService) ListenServer() error {
+	defer utils.FLogDebug.Connection("Session %s, Server %s socket terminated", c.SessionId, (*c.ServerConn).RemoteAddr().String())
 	errs := make(chan error)
 	go func(errs chan error) {
 		for {
 			buf := make([]byte, 12400)
 			n, err := (*c.ServerConn).Read(buf)
 			if err != nil {
-				log.Printf("[server listener] Failed to read from upstream connection: %v", err)
+				// log.Printf("[server listener] Failed to read from upstream connection: %v", err)
 				c.Cancle(err)
 				buf = nil
 				errs <- err
@@ -158,14 +169,14 @@ func (c *ConnectionService) ListenServer() error {
 		case e := <-errs:
 			c.Cancle(e)
 			(*c.ServerConn).Close()
-			log.Printf("[server listener] Thread exit due to error: %v", e)
+			// log.Printf("[server listener] Thread exit due to error: %v", e)
 			<-c.Ctx.Done()
 			return nil
 		case <-c.Ctx.Done():
 			c.Cancle(nil)
 			(*c.ServerConn).Close()
 			<-errs
-			log.Printf("[server listener] Exit due context canceled")
+			// log.Printf("[server listener] Exit due context canceled")
 			return nil
 		}
 	}
@@ -221,8 +232,9 @@ func (c *ConnectionService) Destroy() {
 	c.CloseConn()
 }
 
-func NewConnectionService(mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) *ConnectionService {
+func NewConnectionService(configService *config.ConfigurationService, mutex *sync.Mutex, ctx context.Context, cancle context.CancelCauseFunc, listener *net.Listener) *ConnectionService {
 	return &ConnectionService{
+		configService:   configService,
 		StateChangeLock: mutex,
 		Ctx:             ctx,
 		Cancle:          cancle,
@@ -230,5 +242,6 @@ func NewConnectionService(mutex *sync.Mutex, ctx context.Context, cancle context
 		NetworkMetric:   metricDTO.NetworkMetric{},
 		ClientData:      make(chan []byte, 16),
 		ServerData:      make(chan []byte, 16),
+		SessionId:       uuid.NewString(),
 	}
 }

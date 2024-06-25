@@ -145,7 +145,8 @@ func TestSerialize(t *testing.T) {
 
 func TestDeserialize(t *testing.T) {
 	type args struct {
-		data []byte
+		data        []byte
+		isHandshake bool
 	}
 	tests := []struct {
 		name    string
@@ -157,7 +158,8 @@ func TestDeserialize(t *testing.T) {
 		{
 			name: "Normal ping 1",
 			args: args{
-				data: SAMPLE_STATUS_DATA_1,
+				data:        SAMPLE_STATUS_DATA_1,
+				isHandshake: true,
 			},
 			want:    SAMPLE_STATUS_PACKET_1,
 			want1:   []byte{},
@@ -166,7 +168,8 @@ func TestDeserialize(t *testing.T) {
 		{
 			name: "Normal ping 2",
 			args: args{
-				data: SAMPLE_STATUS_DATA_2,
+				data:        SAMPLE_STATUS_DATA_2,
+				isHandshake: true,
 			},
 			want:    SAMPLE_STATUS_PACKET_2,
 			want1:   []byte{},
@@ -182,6 +185,7 @@ func TestDeserialize(t *testing.T) {
 					}
 					return res
 				}(),
+				isHandshake: true,
 			},
 			want1:   []byte{},
 			wantErr: true,
@@ -189,7 +193,8 @@ func TestDeserialize(t *testing.T) {
 		{
 			name: "Legacy status",
 			args: args{
-				data: LEGACY_STATUS_REQ,
+				data:        LEGACY_STATUS_REQ,
+				isHandshake: true,
 			},
 			want:    Get_LEGACY_STATUS_REQ_PACKET(),
 			want1:   []byte{},
@@ -198,7 +203,7 @@ func TestDeserialize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, got1, err := Deserialize(tt.args.data)
+			got, _, got1, err := Deserialize(tt.args.data, tt.args.isHandshake)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deserialize() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -223,28 +228,32 @@ func TestDeserialize(t *testing.T) {
 
 func TestPacketRound(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   Packet
-		payload []byte
-		wantErr bool
+		name        string
+		input       Packet
+		isHandshake bool
+		payload     []byte
+		wantErr     bool
 	}{
 		{
-			name:    "Normal 1",
-			input:   Packet{PacketHeader: SAMPLE_STATUS_PACKET_1.PacketHeader, Payload: bytes.NewReader(SAMPLE_STATUS_DATA_1[2:])},
-			payload: SAMPLE_STATUS_DATA_1[2:],
-			wantErr: false,
+			name:        "Normal 1",
+			input:       Packet{PacketHeader: SAMPLE_STATUS_PACKET_1.PacketHeader, Payload: bytes.NewReader(SAMPLE_STATUS_DATA_1[2:])},
+			payload:     SAMPLE_STATUS_DATA_1[2:],
+			isHandshake: true,
+			wantErr:     false,
 		},
 		{
-			name:    "Normal 2",
-			input:   Packet{PacketHeader: SAMPLE_STATUS_PACKET_2.PacketHeader, Payload: bytes.NewReader(SAMPLE_STATUS_DATA_2[2:])},
-			payload: SAMPLE_STATUS_DATA_2[2:],
-			wantErr: false,
+			name:        "Normal 2",
+			input:       Packet{PacketHeader: SAMPLE_STATUS_PACKET_2.PacketHeader, Payload: bytes.NewReader(SAMPLE_STATUS_DATA_2[2:])},
+			payload:     SAMPLE_STATUS_DATA_2[2:],
+			isHandshake: true,
+			wantErr:     false,
 		},
 		{
-			name:    "Old protocol 1",
-			input:   Packet{PacketHeader: PacketHeader{Length: 1, ID: 0x00, IsOldProtocol: true}, Payload: bytes.NewReader(LEGACY_STATUS_REQ)},
-			payload: LEGACY_STATUS_REQ,
-			wantErr: false,
+			name:        "Old protocol 1",
+			input:       Packet{PacketHeader: PacketHeader{Length: 1, ID: 0x00, IsOldProtocol: true}, Payload: bytes.NewReader(LEGACY_STATUS_REQ)},
+			payload:     LEGACY_STATUS_REQ,
+			isHandshake: true,
+			wantErr:     false,
 		},
 	}
 	for _, tt := range tests {
@@ -256,7 +265,7 @@ func TestPacketRound(t *testing.T) {
 				return
 			}
 			t.Logf("%x", data)
-			pac, _, remaining, err := Deserialize(data)
+			pac, _, remaining, err := Deserialize(data, tt.isHandshake)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deserialize() error = %v, wantErr %v", err, tt.wantErr)
 				return

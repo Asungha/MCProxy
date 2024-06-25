@@ -5,7 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
+
+	. "mc_reverse_proxy/src/common"
 	"strings"
 )
 
@@ -38,43 +39,54 @@ func (b *ByteReader) ReadByte() (byte, error) {
 	return buf[0], err
 }
 
-func ValidateDataframe(buffer []byte) (error, bool, packetLoggerService.PacketType) {
+func StrictValidateMCPacket(buffer []byte) (error, bool, PacketType) {
 	reader := bytes.NewReader(buffer)
 
 	firstBytes := make([]byte, len(PING_HOST))
 	_, err := reader.Read(firstBytes)
 	if err == nil && bytes.Equal(firstBytes, PING_HOST) {
-		return nil, true, packetLoggerService.MC_HANDSHAKE
+		pacType := UNKNOWN
+		if IsHTTPMethod(strings.Split(string(buffer), " ")[0]) {
+			pacType = HTTP
+		}
+		return nil, true, pacType
 	} else {
 		reader.Reset(buffer)
 	}
+	return ValidateMCPacket(buffer), false, MC_OTHER
+}
 
-	err = nil
+func ValidateHandshake(buffer []byte) (error, bool) {
+	reader := bytes.NewReader(buffer)
 
+	firstBytes := make([]byte, len(PING_HOST))
+	_, err := reader.Read(firstBytes)
+	if err == nil && bytes.Equal(firstBytes, PING_HOST) {
+		return nil, true
+	} else {
+		reader.Reset(buffer)
+	}
+	return ValidateMCPacket(buffer), false
+}
+
+func ValidateMCPacket(buffer []byte) error {
+	reader := bytes.NewReader(buffer)
 	for reader.Len() > 0 {
-		length, _err := UvarintReader(reader)
-		if _err != nil {
-			err = fmt.Errorf("failed to read length: %v", err)
+		length, err := UvarintReader(reader)
+		if err != nil {
+			return fmt.Errorf("failed to read length: %v", err)
 		}
 		if reader.Len() < length {
-			err = fmt.Errorf("length invalid")
+			return fmt.Errorf("length invalid")
 		}
 		buf := make([]byte, length)
-		n, _err := reader.Read(buf)
-		if _err != nil {
-			err = fmt.Errorf("failed to read payload: %v", err)
+		n, err := reader.Read(buf)
+		if err != nil {
+			return fmt.Errorf("failed to read payload: %v", err)
 		}
 		if n != length {
-			err = fmt.Errorf("length invalid")
+			return fmt.Errorf("length invalid")
 		}
 	}
-
-	if err != nil {
-		if IsHTTPMethod(strings.Split(string(buffer), " ")[0]) {
-			return err, false, packetLoggerService.HTTP
-		}
-		return err, false, packetLoggerService.UNKNOWN
-	}
-
-	return nil, false, packetLoggerService.MC_OTHER
+	return nil
 }

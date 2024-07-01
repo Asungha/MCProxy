@@ -61,9 +61,6 @@ func (p *MinecraftProxy) Serve() {
 		statemachine := statemachine.NewNetworkStatemachine(p.configService, p.Listener, p.Repository, &p.ProxyMetric, p.MetricCollector)
 		go statemachine.Run()
 		<-statemachine.ClientConnected
-
-		// log.Printf("[Game Proxy] Connection between proxy and client established")
-		// utils.FLogDebug.Proxy("Connection between proxy and client established")
 		go func(uuid string) {
 			<-statemachine.Ctx.Done()
 		}("")

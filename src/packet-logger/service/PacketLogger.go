@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -57,7 +56,7 @@ func Send(data PacketLog) {
 			ctx, _ := context.WithTimeout(context.Background(), 50*time.Millisecond)
 			_, err := packetLogger.client.Database(packetLogger.config.LoggerMongoDBName).Collection(packetLogger.config.LoggerMongoColName).InsertOne(ctx, data)
 			if err != nil {
-				log.Printf("[Packet Logger] Inserting error : %v", err)
+				utils.FLogErr.PacketLogger("Inserting error: %v", err)
 			}
 		}()
 	}

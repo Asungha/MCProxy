@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	config "mc_reverse_proxy/src/configuration/service"
 	metricDTO "mc_reverse_proxy/src/metric/dto"
 	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
@@ -44,7 +43,7 @@ func (c *ConnectionService) WaitClientConnection() error {
 	}
 	clientConn, err := (*c.Listener).Accept()
 	if err != nil {
-		log.Printf("[Proxy] Failed to accept client connection: %v", err)
+		utils.FLogDebug.Connection("Session %s, Failed to accept client connection: %v", c.SessionId, err)
 		return err
 	}
 	utils.FLogDebug.Connection("Session %s, Initiated connection between client (%s) and the proxy", c.SessionId, clientConn.RemoteAddr().String())
@@ -56,10 +55,9 @@ func (c *ConnectionService) WaitClientConnection() error {
 func (c *ConnectionService) ConnectServer(host string) error {
 	upstreamConn, err := net.Dial("tcp", host)
 	if err != nil {
-		log.Printf("[Proxy] Failed to connect to upstream server: %v", err)
+		utils.FLogDebug.Connection("Session %s, Failed to connect to upstream server %s: %v", c.SessionId, host, err)
 		return err
 	}
-	// log.Printf("[Proxy] Initiated connection between %s and %s", "proxy", upstreamConn.RemoteAddr().String())
 	utils.FLogDebug.Connection("Session %s, Initiated connection between the proxy and server (%s)", c.SessionId, (*c.ClientConn).RemoteAddr().String())
 	c.ServerConn = &upstreamConn
 	return nil

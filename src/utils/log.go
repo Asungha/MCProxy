@@ -86,3 +86,30 @@ var FLogDebug = &flog{
 		fLogFunc("GRPC Control", GRPC_COLOR_info, GRPC_COLOR_info, "\t"+textFormat, text...)
 	},
 }
+
+var FLogErr = &flog{
+	Proxy: func(textFormat string, text ...any) {
+		fLogFunc("Game Proxy", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+	Connection: func(textFormat string, text ...any) {
+		fLogFunc("Connection", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+	ApplicationConn: func(textFormat string, text ...any) {
+		fLogFunc("Connection", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+	Prometheus: func(textFormat string, text ...any) {
+		fLogFunc("Prometheus", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+	PacketLogger: func(textFormat string, text ...any) {
+		fLogFunc("Packet Logger", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+	HTTPBackend: func(textFormat string, text ...any) {
+		fLogFunc("HTTP Backend", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+	HTTPFrontend: func(textFormat string, text ...any) {
+		fLogFunc("HTTP Frontend", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+	GRPCControl: func(textFormat string, text ...any) {
+		fLogFunc("GRPC Control", COLOR_Red, COLOR_Red, "\t"+textFormat, text...)
+	},
+}

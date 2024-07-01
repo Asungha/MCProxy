@@ -41,16 +41,15 @@ func (b *HTTPBackend) Config(engine *gin.Engine) {
 }
 
 func (b *HTTPBackend) Serve() error {
-	engine := gin.Default()
+	engine := gin.New()
+	engine.Use(gin.Recovery())
 	engine.Use(CORSMiddleware())
 	b.Config(engine)
-	// log.Printf("[HTTP Backend] Start server on %s", b.address)
 	utils.FLog.HTTPBackend("Start server on %s", b.address)
 	return engine.Run(b.address)
 }
 
 func NewHTTPBackend(address string, metricCollector *metricService.MetricService, serverRepo proxyService.ServerRepositoryService, eventService *service.EventService) *HTTPBackend {
-	gin.SetMode(gin.ReleaseMode)
 	b := &HTTPBackend{
 		Controller: []common.HTTPController{
 			metric.NewMetricController(metricCollector),

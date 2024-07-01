@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	configService "mc_reverse_proxy/src/configuration/service"
 	controlAdaptor "mc_reverse_proxy/src/control/adaptor"
 	controlService "mc_reverse_proxy/src/control/service"
@@ -10,6 +9,7 @@ import (
 	packetLoggerService "mc_reverse_proxy/src/packet-logger/service"
 	proxyAdaptor "mc_reverse_proxy/src/proxy/adaptor"
 	proxyService "mc_reverse_proxy/src/proxy/service"
+	utils "mc_reverse_proxy/src/utils"
 	webui "mc_reverse_proxy/src/webui"
 	"os"
 )
@@ -54,9 +54,9 @@ func main() {
 	if config.LoggerMongoDBName != "" {
 		err := packetLoggerService.InitPacketLogger(config)
 		if err != nil {
-			log.Printf("Packet logger error : %v", err)
+			// log.Printf("Packet logger error : %v", err)
+			utils.FLogErr.PacketLogger("Packet logger error: %v", err)
 		}
 	}
-
 	p.Serve()
 }

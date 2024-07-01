@@ -3,15 +3,19 @@ package adaptor
 import (
 	"log"
 	"net/http"
-	"time"
 
+	. "mc_reverse_proxy/src/common"
 	service "mc_reverse_proxy/src/metric/service"
+	"mc_reverse_proxy/src/utils"
 )
+
+const serviceName = "Prometheus"
 
 type PrometheusAdaptor struct {
 	MetricCollecter *service.MetricService
 
 	ListenAddress string
+	serviceName   string
 }
 
 func (e *PrometheusAdaptor) handler(w http.ResponseWriter, r *http.Request) {
@@ -29,10 +33,12 @@ func (e *PrometheusAdaptor) handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *PrometheusAdaptor) Serve() {
-	<-time.After(1 * time.Second)
+	// <-time.After(1 * time.Second)
 	http.HandleFunc("/metrics", e.handler)
-	log.Printf("[Prometheus Exporter] Starting server at %s", e.ListenAddress)
+	// log.Printf("%s Starting server at %s", utils.Color("[Prometheus Exporter]", utils.COLOR_Cyan), e.ListenAddress)
+	utils.FLog.Prometheus("Starting server at %s", e.ListenAddress)
 	if err := http.ListenAndServe(e.ListenAddress, nil); err != nil {
-		log.Fatalf("[Prometheus Exporter] Error starting server: %v", err)
+		// log.Fatalf("%s Error starting server: %v", utils.Color("[Prometheus Exporter]", utils.COLOR_Red), err)
+		utils.FFatal(serviceName, COLOR_Red, COLOR_Red, "Error starting server: %v", err)
 	}
 }

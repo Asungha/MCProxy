@@ -134,6 +134,6 @@ func Get_LEGACY_STATUS_REQ_PACKET() Packet {
 
 func Get_LEGACY_STATUS_REQ_HANDSHAKE() *Handshake {
 	h := NewHandshake()
-	h.Decode(LEGACY_STATUS_REQ)
+	h.Decode(LEGACY_STATUS_REQ, true)
 	return h
 }

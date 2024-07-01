@@ -5,18 +5,36 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	. "mc_reverse_proxy/src/common"
 )
 
-func SplitDataframe(buffer []byte) ([][]byte, error) {
+type PacketFragment struct {
+	Data []byte
+	Type PacketType
+}
+
+func SplitDataframe(buffer []byte, strict bool) ([]PacketFragment, error) {
 	if len(buffer) == 0 {
-		return [][]byte{}, errors.New("empty data")
+		return []PacketFragment{}, errors.New("empty data")
 	}
-	_, isOldProtocol := ValidateDataframe(buffer)
-	if isOldProtocol {
-		return [][]byte{buffer}, nil
+	if strict {
+		err, isOldProtocol, PackType := StrictValidateMCPacket(buffer)
+		if err != nil {
+			return []PacketFragment{{Data: buffer, Type: PackType}}, err
+		}
+		if isOldProtocol {
+			return []PacketFragment{{Data: buffer, Type: PackType}}, nil
+		}
+	} else {
+		err := ValidateMCPacket(buffer)
+		if err != nil {
+			return []PacketFragment{{Data: buffer, Type: UNKNOWN}}, err
+		}
 	}
+
 	reader := bytes.NewReader(buffer)
-	res := [][]byte{}
+	res := []PacketFragment{}
+
 	for reader.Len() > 0 {
 		length, err := UvarintReader(reader)
 		if err != nil {
@@ -35,7 +53,7 @@ func SplitDataframe(buffer []byte) ([][]byte, error) {
 		}
 		length_byte := make([]byte, binary.MaxVarintLen64)
 		n = binary.PutUvarint(length_byte, uint64(length))
-		res = append(res, Concat(length_byte[:n], buf))
+		res = append(res, PacketFragment{Data: Concat(length_byte[:n], buf), Type: MC_OTHER})
 	}
 
 	return res, nil
